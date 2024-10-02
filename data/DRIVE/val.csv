@@ -1,0 +1,5 @@
+im_paths,gt_paths,mask_paths
+data/DRIVE/images/37_training.tif,data/DRIVE/manual/37_manual1.gif,data/DRIVE/mask/37_mask.gif
+data/DRIVE/images/38_training.tif,data/DRIVE/manual/38_manual1.gif,data/DRIVE/mask/38_mask.gif
+data/DRIVE/images/39_training.tif,data/DRIVE/manual/39_manual1.gif,data/DRIVE/mask/39_mask.gif
+data/DRIVE/images/40_training.tif,data/DRIVE/manual/40_manual1.gif,data/DRIVE/mask/40_mask.gif

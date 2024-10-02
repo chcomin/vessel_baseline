@@ -1,0 +1,17 @@
+im_paths,gt_paths,mask_paths
+data/DRIVE/images/21_training.tif,data/DRIVE/manual/21_manual1.gif,data/DRIVE/mask/21_mask.gif
+data/DRIVE/images/22_training.tif,data/DRIVE/manual/22_manual1.gif,data/DRIVE/mask/22_mask.gif
+data/DRIVE/images/23_training.tif,data/DRIVE/manual/23_manual1.gif,data/DRIVE/mask/23_mask.gif
+data/DRIVE/images/24_training.tif,data/DRIVE/manual/24_manual1.gif,data/DRIVE/mask/24_mask.gif
+data/DRIVE/images/25_training.tif,data/DRIVE/manual/25_manual1.gif,data/DRIVE/mask/25_mask.gif
+data/DRIVE/images/26_training.tif,data/DRIVE/manual/26_manual1.gif,data/DRIVE/mask/26_mask.gif
+data/DRIVE/images/27_training.tif,data/DRIVE/manual/27_manual1.gif,data/DRIVE/mask/27_mask.gif
+data/DRIVE/images/28_training.tif,data/DRIVE/manual/28_manual1.gif,data/DRIVE/mask/28_mask.gif
+data/DRIVE/images/29_training.tif,data/DRIVE/manual/29_manual1.gif,data/DRIVE/mask/29_mask.gif
+data/DRIVE/images/30_training.tif,data/DRIVE/manual/30_manual1.gif,data/DRIVE/mask/30_mask.gif
+data/DRIVE/images/31_training.tif,data/DRIVE/manual/31_manual1.gif,data/DRIVE/mask/31_mask.gif
+data/DRIVE/images/32_training.tif,data/DRIVE/manual/32_manual1.gif,data/DRIVE/mask/32_mask.gif
+data/DRIVE/images/33_training.tif,data/DRIVE/manual/33_manual1.gif,data/DRIVE/mask/33_mask.gif
+data/DRIVE/images/34_training.tif,data/DRIVE/manual/34_manual1.gif,data/DRIVE/mask/34_mask.gif
+data/DRIVE/images/35_training.tif,data/DRIVE/manual/35_manual1.gif,data/DRIVE/mask/35_mask.gif
+data/DRIVE/images/36_training.tif,data/DRIVE/manual/36_manual1.gif,data/DRIVE/mask/36_mask.gif
