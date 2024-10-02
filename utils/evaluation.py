@@ -1,5 +1,5 @@
 import torch
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score
 import numpy as np
 from scipy.stats import rankdata
 
@@ -7,7 +7,8 @@ def dice_score(actual, predicted):
     actual = np.asarray(actual).astype(bool)
     predicted = np.asarray(predicted).astype(bool)
     im_sum = actual.sum() + predicted.sum()
-    if im_sum == 0: return 1
+    if im_sum == 0: 
+        return 1
     intersection = np.logical_and(actual, predicted)
     return 2. * intersection.sum() / im_sum
 
@@ -42,31 +43,6 @@ def ewma(data, window=5):
     cumsums = mult.cumsum()
     out = offset + cumsums*scale_arr[::-1]
     return out
-from sklearn.metrics import f1_score
-
-# def evaluate(logits, labels, n_classes, ignore_index = -100, fast=True):
-#     all_preds = []
-#     all_targets = []
-#
-#     act = torch.sigmoid if n_classes==1 else torch.nn.Softmax(dim=0)
-#
-#     for i in range(len(logits)):
-#         prediction = act(logits[i]).detach().cpu().numpy()[-1] # this takes last channel in multi-class, ok for 2-class
-#         target = labels[i].cpu().numpy()
-#         all_preds.append(prediction.ravel())
-#         all_targets.append(target.ravel())
-#
-#     all_preds_np = np.hstack(all_preds).ravel()
-#     all_targets_np = np.hstack(all_targets).ravel()
-#
-#     all_preds_np = all_preds_np[all_targets_np != ignore_index]
-#     all_targets_np = all_targets_np[all_targets_np!=ignore_index]
-#     if fast==True:
-#         return fast_auc(all_targets_np>0.5, all_preds_np), f1_score(all_targets_np>0.5, all_preds_np>0.5)
-#     # elif fast==0:
-#     #     return fast_auc(all_targets_np> 0.5, all_preds_np), f1_score(all_targets_np> 0.5, all_preds_np > 0.5)
-#     else:
-#         return roc_auc_score(all_targets_np, all_preds_np), f1_score(all_targets_np, all_preds_np>0.5)
 
 def evaluate(logits, labels, n_classes, ignore_index = -100, fast=False):
 
@@ -81,11 +57,11 @@ def evaluate(logits, labels, n_classes, ignore_index = -100, fast=False):
 
     act = torch.sigmoid if n_classes==1 else torch.nn.Softmax(dim=0)
 
-    for i in range(len(logits)):
+    for logit, label in zip(logits, labels):
         # prediction = act(logits[i]).detach().cpu().numpy()[-1]  # this takes last channel in multi-class, ok for 2-class
         # logits[i] is n_classes x h x w
-        prob = act(logits[i]).detach().cpu().numpy()  # prob is n_classes x h x w
-        target = labels[i].cpu().numpy()
+        prob = act(logit).detach().cpu().numpy()  # prob is n_classes x h x w
+        target = label.cpu().numpy()
 
         if n_classes==1:
             all_probs_0.extend(prob.ravel())
@@ -97,7 +73,8 @@ def evaluate(logits, labels, n_classes, ignore_index = -100, fast=False):
 
         all_targets.append(target.ravel())
 
-    if n_classes == 1: all_probs_np = np.hstack(all_probs_0)
+    if n_classes == 1:
+        all_probs_np = np.hstack(all_probs_0)
     else: all_probs_np = np.stack([all_probs_0, all_probs_1, all_probs_2, all_probs_3], axis=1)
 
     all_targets_np = np.hstack(all_targets)
@@ -110,7 +87,7 @@ def evaluate(logits, labels, n_classes, ignore_index = -100, fast=False):
         return roc_auc_score(all_targets_np, all_probs_np, multi_class='ovo',average='weighted'), f1_score(all_targets_np, all_preds_np,average='weighted')
     else:
         all_preds_np = all_probs_np > 0.5
-        if fast==True:
+        if fast:
             return fast_auc(all_targets_np>0.5, all_probs_np), f1_score(all_targets_np>0.5, all_preds_np)
         else:
             return roc_auc_score(all_targets_np, all_probs_np), f1_score(all_targets_np, all_preds_np)

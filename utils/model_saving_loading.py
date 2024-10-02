@@ -1,7 +1,7 @@
+import argparse
 import os
 import os.path as osp
 import torch
-import argparse
 
 def save_model(path, model, optimizer, stats= None):
     os.makedirs(path, exist_ok=True)

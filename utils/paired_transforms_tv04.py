@@ -1,19 +1,12 @@
 from __future__ import division
-import torch
 import math
 import sys
 import random
-from PIL import Image
-try:
-    import accimage
-except ImportError:
-    accimage = None
-import numpy as np
 import numbers
-import types
 import collections
 import warnings
-
+import numpy as np
+import torch
 from torchvision.transforms import functional as F
 import torchvision.transforms as T
 import pkg_resources
@@ -50,7 +43,7 @@ def _get_image_size(img):
     else:
         raise TypeError("Unexpected type {}".format(type(img)))
 
-class Compose(object):
+class Compose:
     """Composes several transforms together. Generalized to apply each transform
     to two images if they are supplied
 

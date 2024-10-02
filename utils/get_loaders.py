@@ -1,7 +1,3 @@
-from torch.utils.data.dataset import Dataset
-from torch.utils.data import DataLoader
-from . import paired_transforms_tv04 as p_tr
-
 import os
 import os.path as osp
 import pandas as pd
@@ -9,6 +5,9 @@ from PIL import Image
 import numpy as np
 from skimage.measure import regionprops
 import torch
+from torch.utils.data.dataset import Dataset
+from torch.utils.data import DataLoader
+from . import paired_transforms_tv04 as p_tr
 
 class TrainDataset(Dataset):
     def __init__(self, csv_path, transforms=None, label_values=None):
@@ -99,44 +98,6 @@ class TestDataset(Dataset):
 
     def __len__(self):
         return len(self.im_list)
-
-
-def build_pseudo_dataset(train_csv_path, test_csv_path, path_to_preds):
-    # assumes predictions are in path_to_preds and have the same name as images in the test csv
-    # image extension does not matter
-    train_df = pd.read_csv(train_csv_path)
-    test_df = pd.read_csv(test_csv_path)
-
-    # If there are more pseudo-segmentations than training segmentations
-    # we bootstrap training images to get same numbers
-    missing = test_df.shape[0] - train_df.shape[0]
-    if missing > 0:
-        extra_segs = train_df.sample(n=missing, replace=True, random_state=42)
-        train_df = pd.concat([train_df, extra_segs])
-
-
-    train_im_list = list(train_df.im_paths)
-    train_gt_list = list(train_df.gt_paths)
-    train_mask_list = list(train_df.mask_paths)
-
-    test_im_list = list(test_df.im_paths)
-    test_mask_list = list(test_df.mask_paths)
-
-    test_preds = [n for n in os.listdir(path_to_preds) if 'binary' not in n and 'perf' not in n]
-    test_pseudo_gt_list = []
-
-    for n in test_im_list:
-        im_name_no_extension = n.split('/')[-1][:-4]
-        for pred_name in test_preds:
-            pred_name_no_extension = pred_name.split('/')[-1][:-4]
-            if im_name_no_extension == pred_name_no_extension:
-                test_pseudo_gt_list.append(osp.join(path_to_preds, pred_name))
-                break
-    train_im_list.extend(test_im_list)
-    train_gt_list.extend(test_pseudo_gt_list)
-    train_mask_list.extend(test_mask_list)
-    return train_im_list, train_gt_list, train_mask_list
-
 
 def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), label_values=(0, 255)):
 

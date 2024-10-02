@@ -1,64 +1,38 @@
-import sys, json, os, argparse
-from shutil import copyfile, rmtree
+import sys
+import json
+import os
 import os.path as osp
+import argparse
 from datetime import datetime
 import operator
 from tqdm import tqdm
 import numpy as np
 import torch
-from models.get_model import get_arch
 
+from models.get_model import get_arch
 from utils.get_loaders import get_train_val_loaders
-from utils.evaluation import evaluate, ewma
-from utils.model_saving_loading import save_model, str2bool, load_model
+from utils.evaluation import evaluate
+from utils.model_saving_loading import save_model, str2bool
 from utils.reproducibility import set_seeds
 
-from torch.optim.lr_scheduler import CosineAnnealingLR
-
-# argument parsing
-parser = argparse.ArgumentParser()
-# as seen here: https://stackoverflow.com/a/15460288/3208255
-# parser.add_argument('--layers',  nargs='+', type=int, help='unet configuration (depth/filters)')
-# annoyingly, this does not get on well with guild.ai, so we need to reverse to this one:
-
-parser.add_argument('--csv_train', type=str, default='data/DRIVE/train.csv', help='path to training data csv')
-parser.add_argument('--model_name', type=str, default='wnet', help='architecture')
-parser.add_argument('--batch_size', type=int, default=4, help='batch Size')
-parser.add_argument('--grad_acc_steps', type=int, default=0, help='gradient accumulation steps (0)')
-parser.add_argument('--min_lr', type=float, default=1e-8, help='learning rate')
-parser.add_argument('--max_lr', type=float, default=0.01, help='learning rate')
-parser.add_argument('--cycle_lens', type=str, default='20/50', help='cycling config (nr cycles/cycle len')
-parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
-parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
-parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
-parser.add_argument('--do_not_save', type=str2bool, nargs='?', const=True, default=False, help='avoid saving anything')
-parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
-# these three are for training with pseudo-segmentations
-# e.g. --csv_test data/DRIVE/test.csv --path_test_preds results/DRIVE/experiments/wnet_drive
-# e.g. --csv_test data/LES_AV/test_all.csv --path_test_preds results/LES_AV/experiments/wnet_drive
-parser.add_argument('--csv_test', type=str, default=None, help='path to test data csv (for using pseudo labels)')
-parser.add_argument('--path_test_preds', type=str, default=None, help='path to test predictions (for using pseudo labels)')
-parser.add_argument('--checkpoint_folder', type=str, default=None, help='path to model to start training (with pseudo labels now)')
-parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')
-parser.add_argument('--device', type=str, default='cpu', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
-parser.add_argument('--seed', type=int, default=0, help='seed')
-
-
 def compare_op(metric):
-    '''
+    """
     This should return an operator that given a, b returns True if a is better than b
     Also, let us return which is an appropriately terrible initial value for such metric
-    '''
+    """
+
     if metric == 'auc':
-        return operator.gt, 0
+        op, init = operator.gt, 0
     elif metric == 'tr_auc':
-        return operator.gt, 0
+        op, init = operator.gt, 0
     elif metric == 'dice':
-        return operator.gt, 0
+        op, init = operator.gt, 0
     elif metric == 'loss':
-        return operator.lt, np.inf
+        op, init = operator.lt, np.inf
     else:
         raise NotImplementedError
+    
+    return op, init
 
 def reduce_lr(optimizer, epoch, factor=0.1, verbose=True):
     for i, param_group in enumerate(optimizer.param_groups):
@@ -66,26 +40,32 @@ def reduce_lr(optimizer, epoch, factor=0.1, verbose=True):
         new_lr = old_lr * factor
         param_group['lr'] = new_lr
         if verbose:
-            print('Epoch {:5d}: reducing learning rate'
-                  ' of group {} to {:.4e}.'.format(epoch, i, new_lr))
+            print(f'Epoch {epoch:5d}: reducing learning rate of group {i} to {new_lr:.4e}.')
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-def run_one_epoch(loader, model, criterion, optimizer=None, scheduler=None,
-        grad_acc_steps=0, assess=False):
+def run_one_epoch(
+        loader,
+        model,
+        criterion,
+        optimizer=None,
+        scheduler=None,
+        grad_acc_steps=0,
+        assess=False
+        ):
+    
     device='cuda' if next(model.parameters()).is_cuda else 'cpu'
     train = optimizer is not None  # if we are in training mode there will be an optimizer and train=True here
 
-    # if train:
-    #     model.train()
-    # else:
-    #     model.eval()
+    if train:
+        model.train()
+    else:
+        model.eval()
 
-    model.train() if train else model.eval()
-
-    if assess: logits_all, labels_all = [], []
+    if assess:
+        logits_all, labels_all = [], []
     n_elems, running_loss, tr_lr = 0, 0, 0
 
 
@@ -106,12 +86,6 @@ def run_one_epoch(loader, model, criterion, optimizer=None, scheduler=None,
             else:
                 loss = criterion(logits, labels)  # CrossEntropyLoss()
 
-        # if train:  # only in training mode
-        #     optimizer.zero_grad()
-        #     loss.backward()
-        #     optimizer.step()
-        #     scheduler.step()
-
         if train:  # only in training mode
             (loss / (grad_acc_steps + 1)).backward() # for grad_acc_steps=0, this is just loss
             tr_lr = get_lr(optimizer)
@@ -129,7 +103,8 @@ def run_one_epoch(loader, model, criterion, optimizer=None, scheduler=None,
         n_elems += inputs.size(0)
         run_loss = running_loss / n_elems
 
-    if assess: return logits_all, labels_all, run_loss, tr_lr
+    if assess: 
+        return logits_all, labels_all, run_loss, tr_lr
     return None, None, run_loss, tr_lr
 
 def train_one_cycle(train_loader, model, criterion, optimizer=None, scheduler=None, grad_acc_steps=0, cycle=0):
@@ -144,7 +119,7 @@ def train_one_cycle(train_loader, model, criterion, optimizer=None, scheduler=No
             else: assess = False
             tr_logits, tr_labels, tr_loss, tr_lr = run_one_epoch(train_loader, model, criterion, optimizer=optimizer,
                                                           scheduler=scheduler, grad_acc_steps=grad_acc_steps, assess=assess)
-            t.set_postfix(tr_loss_lr="{:.4f}/{:.6f}".format(float(tr_loss), tr_lr))
+            t.set_postfix(tr_loss_lr=f"{float(tr_loss):.4f}/{tr_lr:.6f}")
 
     return tr_logits, tr_labels, tr_loss
 
@@ -155,7 +130,7 @@ def train_model(model, optimizer, criterion, train_loader, val_loader, scheduler
     is_better, best_monitoring_metric = compare_op(metric)
 
     for cycle in range(n_cycles):
-        print('Cycle {:d}/{:d}'.format(cycle+1, n_cycles))
+        print(f'Cycle {cycle+1:d}/{n_cycles:d}')
         # train one cycle, retrieve segmentation data and compute metrics at the end of cycle
         tr_logits, tr_labels, tr_loss = train_one_cycle(train_loader, model, criterion, optimizer, scheduler, grad_acc_steps, cycle)
 
@@ -168,8 +143,8 @@ def train_model(model, optimizer, criterion, train_loader, val_loader, scheduler
             vl_logits, vl_labels, vl_loss, _ = run_one_epoch(val_loader, model, criterion, assess=assess)
             vl_auc, vl_dice = evaluate(vl_logits, vl_labels, model.n_classes)  # for n_classes>1, will need to redo evaluate
             del vl_logits, vl_labels
-        print('Train/Val Loss: {:.4f}/{:.4f}  -- Train/Val AUC: {:.4f}/{:.4f}  -- Train/Val DICE: {:.4f}/{:.4f} -- LR={:.6f}'.format(
-                tr_loss, vl_loss, tr_auc, vl_auc, tr_dice, vl_dice, get_lr(optimizer)).rstrip('0'))
+        msg = f'Train/Val Loss: {tr_loss:.4f}/{vl_loss:.4f}  -- Train/Val AUC: {tr_auc:.4f}/{vl_auc:.4f}  -- Train/Val DICE: {tr_dice:.4f}/{vl_dice:.4f} -- LR={get_lr(optimizer):.6f}'
+        print(msg.rstrip('0'))
 
         # check if performance was better than anyone before and checkpoint if so
         if metric == 'auc':
@@ -181,7 +156,7 @@ def train_model(model, optimizer, criterion, train_loader, val_loader, scheduler
         elif metric == 'dice':
             monitoring_metric = vl_dice
         if is_better(monitoring_metric, best_monitoring_metric):
-            print('Best {} attained. {:.2f} --> {:.2f}'.format(metric, 100*best_monitoring_metric, 100*monitoring_metric))
+            print(f'Best {metric} attained. {100*best_monitoring_metric:.2f} --> {100*monitoring_metric:.2f}')
             best_auc, best_dice, best_cycle = vl_auc, vl_dice, cycle+1
             best_monitoring_metric = monitoring_metric
             if exp_path is not None:
@@ -193,26 +168,38 @@ def train_model(model, optimizer, criterion, train_loader, val_loader, scheduler
     return best_auc, best_dice, best_cycle
 
 if __name__ == '__main__':
-    '''
-    Example:
-    python train_cyclical.py --csv_train data/DRIVE/train.csv --save_path unet_DRIVE
-    '''
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--csv_train', type=str, default='data/DRIVE/train.csv', help='path to training data csv')
+    parser.add_argument('--model_name', type=str, default='unet', help='architecture')
+    parser.add_argument('--batch_size', type=int, default=4, help='batch Size')
+    parser.add_argument('--grad_acc_steps', type=int, default=0, help='gradient accumulation steps (0)')
+    parser.add_argument('--min_lr', type=float, default=1e-8, help='learning rate')
+    parser.add_argument('--max_lr', type=float, default=0.01, help='learning rate')
+    parser.add_argument('--cycle_lens', type=str, default='20/50', help='cycling config (nr cycles/cycle len')
+    parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
+    parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
+    parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
+    parser.add_argument('--do_not_save', type=str2bool, nargs='?', const=True, default=False, help='avoid saving anything')
+    parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
+    parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')
+    parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
+    parser.add_argument('--seed', type=int, default=0, help='seed')
 
     args = parser.parse_args()
 
     if args.device.startswith("cuda"):
         # In case one has multiple devices, we must first set the one
         # we would like to use so pytorch can find it.
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.device.split(":",1)[1]
         if not torch.cuda.is_available():
             raise RuntimeError("cuda is not currently available!")
-        print('* Training on device '.format(args.device))
         device = torch.device("cuda")
     else:  #cpu
         device = torch.device(args.device)
 
     # reproducibility
-    seed_value = 0
+    seed_value = args.seed
     set_seeds(seed_value, args.device.startswith("cuda"))
 
     # gather parser parameters
@@ -244,80 +231,42 @@ if __name__ == '__main__':
         config_file_path = osp.join(experiment_path,'config.cfg')
         with open(config_file_path, 'w') as f:
             json.dump(vars(args), f, indent=2)
-    else: experiment_path=None
+    else: 
+        experiment_path = None
 
     csv_train = args.csv_train
     csv_val = csv_train.replace('train', 'val')
 
-    # training for artery-vein segmentation
-    if 'av' in csv_train:
-        n_classes=4
-        label_values=[0, 85, 170, 255]
-    else:
-        n_classes=1
-        label_values = [0, 255]
+    n_classes = 1
+    label_values = [0, 255]
 
 
-    print("* Creating Dataloaders, batch size = {}, workers = {}".format(bs, args.num_workers))
+    print(f"* Creating Dataloaders, batch size = {bs}, workers = {args.num_workers}")
     train_loader, val_loader = get_train_val_loaders(csv_path_train=csv_train, csv_path_val=csv_val, batch_size=bs, tg_size=tg_size, label_values=label_values, num_workers=args.num_workers)
 
-    # grad_acc_steps: if I want to train with a fake_bs=K but the actual bs I want is bs=N, then you use
-    # grad_acc_steps = N/K - 1.
-    # Example: bs=4, fake_bs=4 -> grad_acc_steps = 0 (default)
-    # Example: bs=4, fake_bs=2 -> grad_acc_steps = 1
-    # Example: bs=4, fake_bs=1 -> grad_acc_steps = 3
-
-
-    print('* Instantiating a {} model'.format(model_name))
+    print(f'* Instantiating a {model_name} model')
     model = get_arch(model_name, in_c=args.in_c, n_classes=n_classes)
     model = model.to(device)
 
-    print("Total params: {0:,}".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
+    num_p = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total params: {num_p:,}")
     optimizer = torch.optim.Adam(model.parameters(), lr=max_lr)
 
-    ### TRAINING WITH PSEUDO-LABELS
-    csv_test = args.csv_test
-    path_test_preds = args.path_test_preds
-    checkpoint_folder = args.checkpoint_folder
-    if csv_test is not None:
-        print('Training with pseudo-labels, completing training set with predictions on test set')
-        from utils.get_loaders import build_pseudo_dataset
-        tr_im_list, tr_gt_list, tr_mask_list = build_pseudo_dataset(csv_train, csv_test, path_test_preds)
-        train_loader.dataset.im_list = tr_im_list
-        train_loader.dataset.gt_list = tr_gt_list
-        train_loader.dataset.mask_list = tr_mask_list
-        print('* Loading weights from previous checkpoint={}'.format(checkpoint_folder))
-        model, stats, optimizer_state_dict = load_model(model, checkpoint_folder, device=device, with_opt=True)
-        optimizer.load_state_dict(optimizer_state_dict)
-        for i, param_group in enumerate(optimizer.param_groups):
-            param_group['lr'] = max_lr
-            param_group['initial_lr'] = max_lr
-
-
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=cycle_lens[0] * len(train_loader), eta_min=0)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cycle_lens[0] * len(train_loader), eta_min=0)
     setattr(optimizer, 'max_lr', max_lr)  # store it inside the optimizer for accessing to it later
     setattr(scheduler, 'cycle_lens', cycle_lens)
 
-
     criterion = torch.nn.BCEWithLogitsLoss() if model.n_classes == 1 else torch.nn.CrossEntropyLoss()
-
 
     print('* Instantiating loss function', str(criterion))
     print('* Starting to train\n','-' * 10)
 
-
     m1, m2, m3=train_model(model, optimizer, criterion, train_loader, val_loader, scheduler, grad_acc_steps, metric, experiment_path)
 
-    print("val_auc: %f" % m1)
-    print("val_dice: %f" % m2)
-    print("best_cycle: %d" % m3)
+    print(f"val_auc: {m1}")
+    print(f"val_dice: {m2}")
+    print(f"best_cycle: {m3}")
     if do_not_save is False:
-        # file = open(osp.join(experiment_path, 'val_metrics.txt'), 'w')
-        # file.write(str(m1)+ '\n')
-        # file.write(str(m2)+ '\n')
-        # file.write(str(m3)+ '\n')
-        # file.close()
 
         with open(osp.join(experiment_path, 'val_metrics.txt'), 'w') as f:
-            print('Best AUC = {:.2f}\nBest DICE = {:.2f}\nBest cycle = {}'.format(100*m1, 100*m2, m3), file=f)
+            print(f'Best AUC = {100*m1:.2f}\nBest DICE = {100*m2:.2f}\nBest cycle = {m3}', file=f)
