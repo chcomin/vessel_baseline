@@ -1,35 +1,19 @@
-import os, json, sys
+import json
+import sys
+import os
 import os.path as osp
 import argparse
 import warnings
-from tqdm import tqdm
-import numpy
 import time
-
+from tqdm import tqdm
 import numpy as np
 from skimage.io import imsave
 from skimage.util import img_as_ubyte
 from skimage.transform import resize
 import torch
-from utils.model_saving_loading import str2bool
 from models.get_model import get_arch
 from utils.get_loaders import get_test_dataset
 from utils.model_saving_loading import load_model
-
-# argument parsing
-parser = argparse.ArgumentParser()
-required_named = parser.add_argument_group('required arguments')
-required_named.add_argument('--dataset', type=str, help='generate results for which dataset', required=True)
-parser.add_argument('--public', type=str2bool, nargs='?', const=True, default=True, help='public or private data')
-# parser.add_argument('--experiment_path', help='experiments/subfolder where checkpoint is', default=None)
-parser.add_argument('--tta', type=str, default='from_preds', help='test-time augmentation (no/from_logits/from_preds)')
-parser.add_argument('--binarize', type=str, default='otsu', help='binarization scheme (\'otsu\')')
-parser.add_argument('--config_file', type=str, default=None, help='experiments/name_of_config_file, overrides everything')
-# im_size overrides config file
-parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
-parser.add_argument('--device', type=str, default='cpu', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
-parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
-parser.add_argument('--result_path', type=str, default='results', help='path to save predictions (defaults to results')
 
 def flip_ud(tens):
     return torch.flip(tens, dims=[1])
@@ -81,41 +65,31 @@ def save_pred(full_pred, save_results_path, im_name):
         # this casts preds to int, loses precision but meh
         imsave(save_name, img_as_ubyte(full_pred))
 
-if __name__ == '__main__':
-    '''
-    Example:
-    python generate_results.py --config_file experiments/unet_drive/config.cfg --dataset DRIVE
-    '''
-
-    args = parser.parse_args()
+def main(args):
 
     if args.device.startswith("cuda"):
-        # In case one has multiple devices, we must first set the one
-        # we would like to use so pytorch can find it.
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.device.split(":",1)[1]
         if not torch.cuda.is_available():
             raise RuntimeError("cuda is not currently available!")
-        print(f"* Running prediction on device '{args.device}'...")
         device = torch.device("cuda")
     else:  #cpu
         device = torch.device(args.device)
 
     dataset = args.dataset
-    binarize = args.binarize
     tta = args.tta
-    public = str2bool(args.public)
 
     # parse config file if provided
     config_file = args.config_file
     if config_file is not None:
-        if not osp.isfile(config_file): raise Exception('non-existent config file')
+        if not osp.isfile(config_file):
+            raise ValueError('non-existent config file')
         with open(args.config_file, 'r') as f:
             args.__dict__.update(json.load(f))
     experiment_path = args.experiment_path # these should exist in a config file
     model_name = args.model_name
     in_c = args.in_c
 
-    if experiment_path is None: raise Exception('must specify path to experiment')
+    if experiment_path is None:
+        raise ValueError('must specify path to experiment')
 
     im_size = tuple([int(item) for item in args.im_size.split(',')])
     if isinstance(im_size, tuple) and len(im_size)==1:
@@ -125,19 +99,17 @@ if __name__ == '__main__':
     else:
         sys.exit('im_size should be a number or a tuple of two numbers')
 
-    if public: data_path = osp.join('data', dataset)
-    else: data_path = osp.join('private_data', dataset)
+    data_path = osp.join('data', dataset)
 
     csv_path = 'test_all.csv'
     print('* Reading test data from ' + osp.join(data_path, csv_path))
     test_dataset = get_test_dataset(data_path, csv_path=csv_path, tg_size=tg_size)
-    print('* Instantiating model  = ' + str(model_name))
+    print(f'* Instantiating model  = {str(model_name)}')
     model = get_arch(model_name, in_c=in_c).to(device)
-    if model_name == 'wnet': model.mode='eval'
 
     print('* Loading trained weights from ' + experiment_path)
     try:
-        model, stats = load_model(model, experiment_path, device)
+        model, stats, _ = load_model(model, experiment_path, device)
     except RuntimeError:
         sys.exit('---- bad config specification (check layers, n_classes, etc.) ---- ')
     model.eval()
@@ -152,5 +124,26 @@ if __name__ == '__main__':
         times.append(time.perf_counter() - start_time)
         save_pred(full_pred, save_results_path, im_name)
 
-    print(f"* Average image time: {numpy.mean(times):g}s")
+    print(f"* Average image time: {np.mean(times):g}s")
     print('* Done')
+
+def get_args():
+
+    parser = argparse.ArgumentParser()
+    required_named = parser.add_argument_group('required arguments')
+    required_named.add_argument('--dataset', type=str, help='generate results for which dataset', required=True)
+    parser.add_argument('--tta', type=str, default='from_preds', help='test-time augmentation (no/from_logits/from_preds)')
+    parser.add_argument('--config_file', type=str, default=None, help='experiments/name_of_config_file, overrides everything')
+    # im_size overrides config file
+    parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
+    parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
+    parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
+    parser.add_argument('--result_path', type=str, default='results', help='path to save predictions (defaults to results')
+
+    return parser.parse_args()
+
+if __name__ == '__main__':
+
+    args = get_args()
+    main(args)
+    

@@ -1,3 +1,5 @@
 _*
 *.ipynb_checkpoints
 *.ipynb
+results/**/*.png
+!results/**/perf/*.png

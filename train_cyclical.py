@@ -55,7 +55,7 @@ def run_one_epoch(
         grad_acc_steps=0,
         assess=False
         ):
-    
+
     device='cuda' if next(model.parameters()).is_cuda else 'cpu'
     train = optimizer is not None  # if we are in training mode there will be an optimizer and train=True here
 
@@ -103,7 +103,7 @@ def run_one_epoch(
         n_elems += inputs.size(0)
         run_loss = running_loss / n_elems
 
-    if assess: 
+    if assess:
         return logits_all, labels_all, run_loss, tr_lr
     return None, None, run_loss, tr_lr
 
@@ -167,31 +167,9 @@ def train_model(model, optimizer, criterion, train_loader, val_loader, scheduler
     torch.cuda.empty_cache()
     return best_auc, best_dice, best_cycle
 
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--csv_train', type=str, default='data/DRIVE/train.csv', help='path to training data csv')
-    parser.add_argument('--model_name', type=str, default='unet', help='architecture')
-    parser.add_argument('--batch_size', type=int, default=4, help='batch Size')
-    parser.add_argument('--grad_acc_steps', type=int, default=0, help='gradient accumulation steps (0)')
-    parser.add_argument('--min_lr', type=float, default=1e-8, help='learning rate')
-    parser.add_argument('--max_lr', type=float, default=0.01, help='learning rate')
-    parser.add_argument('--cycle_lens', type=str, default='20/50', help='cycling config (nr cycles/cycle len')
-    parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
-    parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
-    parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
-    parser.add_argument('--do_not_save', type=str2bool, nargs='?', const=True, default=False, help='avoid saving anything')
-    parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
-    parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')
-    parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
-    parser.add_argument('--seed', type=int, default=0, help='seed')
-
-    args = parser.parse_args()
+def main(args):
 
     if args.device.startswith("cuda"):
-        # In case one has multiple devices, we must first set the one
-        # we would like to use so pytorch can find it.
         if not torch.cuda.is_available():
             raise RuntimeError("cuda is not currently available!")
         device = torch.device("cuda")
@@ -204,7 +182,7 @@ if __name__ == '__main__':
 
     # gather parser parameters
     model_name = args.model_name
-    max_lr, min_lr, bs, grad_acc_steps = args.max_lr, args.min_lr, args.batch_size, args.grad_acc_steps
+    max_lr, bs, grad_acc_steps = args.max_lr, args.batch_size, args.grad_acc_steps
     cycle_lens, metric = args.cycle_lens.split('/'), args.metric
     cycle_lens = list(map(int, cycle_lens))
 
@@ -231,7 +209,7 @@ if __name__ == '__main__':
         config_file_path = osp.join(experiment_path,'config.cfg')
         with open(config_file_path, 'w') as f:
             json.dump(vars(args), f, indent=2)
-    else: 
+    else:
         experiment_path = None
 
     csv_train = args.csv_train
@@ -261,7 +239,7 @@ if __name__ == '__main__':
     print('* Instantiating loss function', str(criterion))
     print('* Starting to train\n','-' * 10)
 
-    m1, m2, m3=train_model(model, optimizer, criterion, train_loader, val_loader, scheduler, grad_acc_steps, metric, experiment_path)
+    m1, m2, m3 = train_model(model, optimizer, criterion, train_loader, val_loader, scheduler, grad_acc_steps, metric, experiment_path)
 
     print(f"val_auc: {m1}")
     print(f"val_dice: {m2}")
@@ -270,3 +248,29 @@ if __name__ == '__main__':
 
         with open(osp.join(experiment_path, 'val_metrics.txt'), 'w') as f:
             print(f'Best AUC = {100*m1:.2f}\nBest DICE = {100*m2:.2f}\nBest cycle = {m3}', file=f)
+
+def get_args():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--csv_train', type=str, default='data/DRIVE/train.csv', help='path to training data csv')
+    parser.add_argument('--model_name', type=str, default='unet', help='architecture')
+    parser.add_argument('--batch_size', type=int, default=4, help='batch Size')
+    parser.add_argument('--grad_acc_steps', type=int, default=0, help='gradient accumulation steps (0)')
+    parser.add_argument('--max_lr', type=float, default=0.01, help='learning rate')
+    parser.add_argument('--cycle_lens', type=str, default='20/50', help='cycling config (nr cycles/cycle len')
+    parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
+    parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
+    parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
+    parser.add_argument('--do_not_save', type=str2bool, nargs='?', const=True, default=False, help='avoid saving anything')
+    parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
+    parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')
+    parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
+    parser.add_argument('--seed', type=int, default=0, help='seed')
+
+    return parser.parse_args()
+
+if __name__ == '__main__':
+
+    args = get_args()
+    main(args)

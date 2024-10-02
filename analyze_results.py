@@ -1,13 +1,15 @@
 import argparse
-from PIL import Image
-import os, sys
+import sys
+import os
 import os.path as osp
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+from PIL import Image
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc, confusion_matrix, accuracy_score
 from sklearn.metrics import matthews_corrcoef
+from skimage import img_as_float
 from utils.evaluation import dice_score
 from utils.model_saving_loading import str2bool
 
@@ -15,33 +17,21 @@ from utils.model_saving_loading import str2bool
 # being that dice here expects bools and it won't work in multi-class scenarios. Same goes for accuracy_score.
 # (see https://brenocon.com/blog/2012/04/f-scores-dice-and-jaccard-set-similarity/)
 
-# argument parsing
-parser = argparse.ArgumentParser()
-parser.add_argument('--train_dataset', type=str, default='DRIVE', help='which dataset was the model trained on')
-parser.add_argument('--test_dataset', type=str, default='DRIVE', help='which dataset to test')
-parser.add_argument('--path_train_preds', type=str, default=None, help='path to training predictions')
-parser.add_argument('--path_test_preds', type=str, default=None, help='path to test predictions')
-parser.add_argument('--cut_off', type=str, default='dice', help='threshold maximizing x, x=dice/acc/youden')
-parser.add_argument('--public', type=str2bool, nargs='?', const=True, default=True, help='public or private dataset')
-
 def get_labels_preds(path_to_preds, csv_path):
     df = pd.read_csv(csv_path)
-    im_list, mask_list, gt_list = df.im_paths, df.mask_paths, df.gt_paths
-    all_bin_preds = []
+    im_paths, mask_paths, gt_paths = df.im_paths, df.mask_paths, df.gt_paths
     all_preds = []
     all_gts = []
-    for i in range(len(gt_list)):
-        im_path = im_list[i].rsplit('/', 1)[-1]
+    for im_path, gt_path, mask_path in zip(im_paths, gt_paths, mask_paths):
+        im_path = im_path.rsplit('/', 1)[-1]
         pred_path = osp.join(path_to_preds, im_path[:-4] + '.png')
-        gt_path = gt_list[i]
-        mask_path = mask_list[i]
 
         gt = np.array(Image.open(gt_path)).astype(bool)
         mask = np.array(Image.open(mask_path).convert('L')).astype(bool)
-        from skimage import img_as_float
-        try: pred = img_as_float(np.array(Image.open(pred_path)))
+        try:
+            pred = img_as_float(np.array(Image.open(pred_path)))
         except FileNotFoundError:
-            sys.exit('---- no predictions found at {} (maybe run first generate_results.py?) ---- '.format(path_to_preds))
+            sys.exit(f'---- no predictions found at {path_to_preds} (maybe run first generate_results.py?) ---- ')
         gt_flat = gt.ravel()
         mask_flat = mask.ravel()
         pred_flat = pred.ravel()
@@ -59,7 +49,6 @@ def cutoff_youden(fpr, tpr, thresholds):
     optimal_idx = np.argmax(tpr - fpr)
     optimal_threshold = thresholds[optimal_idx]
     return optimal_threshold
-
 
 def cutoff_dice(preds, gts):
     dice_scores = []
@@ -91,7 +80,7 @@ def compute_performance(preds, gts, save_path=None, opt_threshold=None, cut_off=
     if save_path is not None:
         fig = plt.figure(figsize=(8, 8))
         plt.plot(fpr, tpr, label='ROC curve')
-        ll = 'AUC = {:4f}'.format(global_auc)
+        ll = f'AUC = {global_auc:4f}'
         plt.legend([ll], loc='lower right')
         fig.tight_layout()
         if opt_threshold is None:
@@ -126,25 +115,8 @@ def compute_performance(preds, gts, save_path=None, opt_threshold=None, cut_off=
 
     return global_auc, acc, dice, mcc, specificity, sensitivity, opt_threshold
 
-if __name__ == '__main__':
-    '''
-    Note 1: in order to use analyze_results, one must first have corresponding predictions in path_to_preds/
+def main(args):
 
-    Note 2: below, experimentA/experimentB/experimentC contain models trained on DRIVE/CHASEDB/HRF respectively
-    - evaluating on test set for the training set of the same database:
-    python analyze_results.py --path_train_preds results/DRIVE/experiments/unet_drive
-                              --path_test_preds results/DRIVE/experiments/unet_drive
-                              --train_dataset DRIVE --test_dataset DRIVE
-    - different test set
-    python analyze_results.py --path_train_preds results/DRIVE/experiments/unet_drive
-                              --path_test_preds results/CHASEDB/experiments/unet_drive
-                              --train_dataset DRIVE --test_dataset CHASEDB
-    '''
-    exp_path = 'experiments/'
-    results_path = 'results/'
-
-    # gather parser parameters
-    args = parser.parse_args()
     train_dataset = args.train_dataset
     test_dataset = args.test_dataset
     path_train_preds = args.path_train_preds
@@ -161,17 +133,18 @@ if __name__ == '__main__':
         print(8 * '-', ' For AUCKLAND , performance evaluation is **quite** heavy ', 8 * '-')
         print(100 * '-')
 
-    print('* Analyzing performance in {} training set -- Obtaining optimal threshold maximizing {}'.format(train_dataset, cut_off))
-    print('* Reading predictions from {}'.format(path_train_preds))
+    print(f'* Analyzing performance in {train_dataset} training set -- Obtaining optimal threshold maximizing {cut_off}')
+    print(f'* Reading predictions from {path_train_preds}')
     save_path = osp.join(path_train_preds, 'perf')
 
     perf_csv_path = osp.join(save_path, 'training_performance.csv')
     csv_path = osp.join('data', train_dataset, 'train.csv')
-    if 'HRF' in train_dataset: csv_path = osp.join('data', train_dataset, 'train_full_res.csv')
+    if 'HRF' in train_dataset:
+        csv_path = osp.join('data', train_dataset, 'train_full_res.csv')
     preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
     os.makedirs(save_path, exist_ok=True)
-    global_auc_tr, acc_tr, dice_tr, mcc_tr, spec_tr, sens_tr, opt_thresh_tr =\
-        compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
+    metrics =compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
+    global_auc_tr, acc_tr, dice_tr, mcc_tr, spec_tr, sens_tr, opt_thresh_tr = metrics
 
     perf_df_train = pd.DataFrame({'auc': global_auc_tr,
                                 'acc': acc_tr,
@@ -182,13 +155,14 @@ if __name__ == '__main__':
                                 'opt_t': opt_thresh_tr}, index=[0])
     perf_df_train.to_csv(perf_csv_path, index=False)
 
-    print('* Analyzing performance in {} validation set'.format(train_dataset))
+    print(f'* Analyzing performance in {train_dataset} validation set')
     perf_csv_path = osp.join(save_path, 'validation_performance.csv')
     csv_path = osp.join('data', train_dataset, 'val.csv')
-    if 'HRF' in train_dataset: csv_path = osp.join('data', train_dataset, 'val_full_res.csv')
+    if 'HRF' in train_dataset:
+        csv_path = osp.join('data', train_dataset, 'val_full_res.csv')
     preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
-    global_auc_vl, acc_vl, dice_vl, mcc_vl, spec_vl, sens_vl, _ =\
-        compute_performance(preds, gts, save_path=save_path, opt_threshold=opt_thresh_tr, cut_off=cut_off, mode='train')
+    metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=opt_thresh_tr, cut_off=cut_off, mode='train')
+    global_auc_vl, acc_vl, dice_vl, mcc_vl, spec_vl, sens_vl, _ = metrics
     perf_df_train = pd.DataFrame({'auc': global_auc_vl,
                                   'acc': acc_vl,
                                   'dice/F1': dice_vl,
@@ -197,8 +171,8 @@ if __name__ == '__main__':
                                   'sens': sens_vl}, index=[0])
     perf_df_train.to_csv(perf_csv_path, index=False)
 
-    print('*Analyzing performance in {} test set'.format(test_dataset))
-    print('* Reading predictions from {}'.format(path_test_preds))
+    print(f'*Analyzing performance in {test_dataset} test set')
+    print(f'* Reading predictions from {path_test_preds}')
     save_path = osp.join(path_test_preds, 'perf')
     os.makedirs(save_path, exist_ok=True)
     perf_csv_path = osp.join(save_path, 'test_performance.csv')
@@ -223,11 +197,28 @@ if __name__ == '__main__':
                                  'sens': sens_test}, index=[0])
     perf_df_test.to_csv(perf_csv_path, index=False)
     print('* Done')
-    print('AUC in Train/Val/Test set is {:.4f}/{:.4f}/{:.4f}'.format(global_auc_tr, global_auc_vl, global_auc_test))
-    print('Accuracy in Train/Val/Test set is {:.4f}/{:.4f}/{:.4f}'.format(acc_tr, acc_vl, acc_test))
-    print('Dice/F1 score in Train/Val/Test set is {:.4f}/{:.4f}/{:.4f}'.format(dice_tr, dice_vl, dice_test))
-    print('MCC score in Train/Val/Test set is {:.4f}/{:.4f}/{:.4f}'.format(mcc_tr, mcc_vl, mcc_test))
-    print('Specificity in Train/Val/Test set is {:.4f}/{:.4f}/{:.4f}'.format(spec_tr, spec_vl, spec_test))
-    print('Sensitivity in Train/Val/Test set is {:.4f}/{:.4f}/{:.4f}'.format(sens_tr, sens_vl, sens_test))
+    print(f'AUC in Train/Val/Test set is {global_auc_tr:.4f}/{global_auc_vl:.4f}/{global_auc_test:.4f}')
+    print(f'Accuracy in Train/Val/Test set is {acc_tr:.4f}/{acc_vl:.4f}/{acc_test:.4f}')
+    print(f'Dice/F1 score in Train/Val/Test set is {dice_tr:.4f}/{dice_vl:.4f}/{dice_test:.4f}')
+    print(f'MCC score in Train/Val/Test set is {mcc_tr:.4f}/{mcc_vl:.4f}/{mcc_test:.4f}')
+    print(f'Specificity in Train/Val/Test set is {spec_tr:.4f}/{spec_vl:.4f}/{spec_test:.4f}')
+    print(f'Sensitivity in Train/Val/Test set is {sens_tr:.4f}/{sens_vl:.4f}/{sens_test:.4f}')
     print('ROC curve plots saved to ', save_path)
     print('Perf csv saved at ', perf_csv_path)
+
+def get_args():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train_dataset', type=str, default='DRIVE', help='which dataset was the model trained on')
+    parser.add_argument('--test_dataset', type=str, default='DRIVE', help='which dataset to test')
+    parser.add_argument('--path_train_preds', type=str, default=None, help='path to training predictions')
+    parser.add_argument('--path_test_preds', type=str, default=None, help='path to test predictions')
+    parser.add_argument('--cut_off', type=str, default='dice', help='threshold maximizing x, x=dice/acc/youden')
+    parser.add_argument('--public', type=str2bool, nargs='?', const=True, default=True, help='public or private dataset')
+
+    return parser.parse_args()
+
+if __name__ == '__main__':
+
+    args = get_args()
+    main(args)
