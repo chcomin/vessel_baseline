@@ -1,9 +1,8 @@
-import os
 import os.path as osp
 import pandas as pd
 from PIL import Image
 import numpy as np
-from skimage.measure import regionprops
+from skimage import measure
 import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
@@ -26,7 +25,7 @@ class TrainDataset(Dataset):
         return Image.fromarray(gdt_gray)
 
     def crop_to_fov(self, img, target, mask):
-        minr, minc, maxr, maxc = regionprops(np.array(mask))[0].bbox
+        minr, minc, maxr, maxc = measure.regionprops(np.array(mask))[0].bbox
         im_crop = Image.fromarray(np.array(img)[minr:maxr, minc:maxc])
         tg_crop = Image.fromarray(np.array(target)[minr:maxr, minc:maxc])
         mask_crop = Image.fromarray(np.array(mask)[minr:maxr, minc:maxc])
@@ -71,7 +70,7 @@ class TestDataset(Dataset):
 
     def crop_to_fov(self, img, mask):
         mask = np.array(mask).astype(int)
-        minr, minc, maxr, maxc = regionprops(mask)[0].bbox
+        minr, minc, maxr, maxc = measure.regionprops(mask)[0].bbox
         im_crop = Image.fromarray(np.array(img)[minr:maxr, minc:maxc])
         return im_crop, [minr, minc, maxr, maxc]
 
