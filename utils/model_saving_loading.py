@@ -22,7 +22,7 @@ def load_model(model, experiment_path, device='cpu', with_opt=False):
 def str2bool(v):
     # as seen here: https://stackoverflow.com/a/43357954/3208255
     if isinstance(v, bool):
-       return v
+        return v
     if v.lower() in ('true','yes'):
         return True
     elif v.lower() in ('false','no'):

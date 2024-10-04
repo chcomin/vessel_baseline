@@ -7,10 +7,10 @@ from skimage import measure
 import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
-from . import paired_transforms_tv04 as p_tr
 from torchvision.transforms import v2 as tv_transf
 from torchvision.transforms.v2 import functional as F
 from torchvision import tv_tensors
+from . import paired_transforms_tv04 as p_tr
 
 class TrainDataset(Dataset):
     def __init__(self, csv_path, transforms=None, label_values=None):
@@ -166,6 +166,3 @@ def get_test_dataset(data_path, csv_path='test.csv', tg_size=(512, 512)):
     test_dataset = TestDataset(csv_path=path_test_csv, tg_size=tg_size)
 
     return test_dataset
-
-
-

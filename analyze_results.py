@@ -183,7 +183,8 @@ def main(args):
     else:
         print('-- Testing on same data source as training')
 
-    if public: path_test_csv = osp.join('data', test_dataset, csv_name)
+    if public: 
+        path_test_csv = osp.join('data', test_dataset, csv_name)
     else: path_test_csv = osp.join('private_data', test_dataset, csv_name)
 
     preds, gts = get_labels_preds(path_test_preds, csv_path = path_test_csv)

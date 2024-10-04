@@ -31,7 +31,7 @@ def compare_op(metric):
         op, init = operator.lt, np.inf
     else:
         raise NotImplementedError
-    
+
     return op, init
 
 def reduce_lr(optimizer, epoch, factor=0.1, verbose=True):
@@ -115,7 +115,8 @@ def train_one_cycle(train_loader, model, criterion, optimizer=None, scheduler=No
 
     with tqdm(range(cycle_len)) as t:
         for epoch in t:
-            if epoch == cycle_len-1: assess=True # only get logits/labels on last cycle
+            if epoch == cycle_len-1: 
+                assess=True # only get logits/labels on last cycle
             else: assess = False
             tr_logits, tr_labels, tr_loss, tr_lr = run_one_epoch(train_loader, model, criterion, optimizer=optimizer,
                                                           scheduler=scheduler, grad_acc_steps=grad_acc_steps, assess=assess)

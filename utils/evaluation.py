@@ -7,7 +7,7 @@ def dice_score(actual, predicted):
     actual = np.asarray(actual).astype(bool)
     predicted = np.asarray(predicted).astype(bool)
     im_sum = actual.sum() + predicted.sum()
-    if im_sum == 0: 
+    if im_sum == 0:
         return 1
     intersection = np.logical_and(actual, predicted)
     return 2. * intersection.sum() / im_sum

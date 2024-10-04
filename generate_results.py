@@ -9,7 +9,7 @@ from tqdm import tqdm
 import numpy as np
 from skimage.io import imsave
 from skimage.util import img_as_ubyte
-from skimage.transform import resize
+import skimage.transform
 import torch
 from models.get_model import get_arch
 from utils.get_loaders import get_test_dataset
@@ -48,7 +48,7 @@ def create_pred(model, tens, mask, coords_crop, original_sz, tta='no'):
         else: raise NotImplementedError
     pred = pred.detach().cpu().numpy()[-1]  # this takes last channel in multi-class, ok for 2-class
     # Orders: 0: NN, 1: Bilinear(default), 2: Biquadratic, 3: Bicubic, 4: Biquartic, 5: Biquintic
-    pred = resize(pred, output_shape=original_sz, order=3)
+    pred = skimage.transform.resize(pred, output_shape=original_sz, order=3)
     full_pred = np.zeros_like(mask, dtype=float)
     full_pred[coords_crop[0]:coords_crop[2], coords_crop[1]:coords_crop[3]] = pred
     full_pred[~mask.astype(bool)] = 0
@@ -146,4 +146,4 @@ if __name__ == '__main__':
 
     args = get_args()
     main(args)
-    
+
