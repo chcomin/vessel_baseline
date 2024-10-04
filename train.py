@@ -62,7 +62,6 @@ def run_one_epoch(
         criterion,
         optimizer=None,
         scheduler=None,
-        grad_acc_steps=0,
         assess=False
         ):
 
@@ -79,31 +78,20 @@ def run_one_epoch(
     n_elems, running_loss, tr_lr = 0, 0, 0
 
 
-    for i_batch, (inputs, labels) in enumerate(loader):
+    for inputs, labels in loader:
         inputs, labels = inputs.to(device), labels.to(device)
         logits = model(inputs)
-        if isinstance(logits, tuple): # wnet
-            logits_aux, logits = logits
-            if model.n_classes == 1: # BCEWithLogitsLoss()/DiceLoss()
-                loss_aux = criterion(logits_aux, labels.unsqueeze(dim=1).float())
-                loss = loss_aux + criterion(logits, labels.unsqueeze(dim=1).float())
-            else: # CrossEntropyLoss()
-                loss_aux = criterion(logits_aux, labels)
-                loss = loss_aux + criterion(logits, labels)
-        else: # not wnet
-            if model.n_classes == 1:
-                loss = criterion(logits, labels.unsqueeze(dim=1).float())  # BCEWithLogitsLoss()/DiceLoss()
-            else:
-                loss = criterion(logits, labels)  # CrossEntropyLoss()
+        if model.n_classes == 1:
+            loss = criterion(logits, labels.unsqueeze(dim=1).float())  # BCEWithLogitsLoss()/DiceLoss()
+        else:
+            loss = criterion(logits, labels)  # CrossEntropyLoss()
 
         if train:  # only in training mode
-            (loss / (grad_acc_steps + 1)).backward() # for grad_acc_steps=0, this is just loss
+            optimizer.zero_grad()
+            loss.backward()
             tr_lr = get_lr(optimizer)
-            if i_batch % (grad_acc_steps+1) == 0:  # for grad_acc_steps=0, this is always True
-                optimizer.step()
-                for _ in range(grad_acc_steps+1):
-                    scheduler.step() # for grad_acc_steps=0, this means once
-                optimizer.zero_grad()
+            optimizer.step()
+            scheduler.step()
         if assess:
             logits_all.extend(logits)
             labels_all.extend(labels)
@@ -117,66 +105,72 @@ def run_one_epoch(
         return logits_all, labels_all, run_loss, tr_lr
     return None, None, run_loss, tr_lr
 
-def train_one_cycle(train_loader, model, criterion, optimizer=None, scheduler=None, grad_acc_steps=0, cycle=0):
+def train_one_cycle(train_loader, model, criterion, optimizer=None, scheduler=None, cycle=0):
 
     model.train()
-    optimizer.zero_grad()
     cycle_len = scheduler.cycle_lens[cycle]
 
     with tqdm(range(cycle_len)) as t:
         for epoch in t:
-            if epoch == cycle_len-1: 
+            if epoch == cycle_len-1:
                 assess=True # only get logits/labels on last cycle
             else: assess = False
             tr_logits, tr_labels, tr_loss, tr_lr = run_one_epoch(train_loader, model, criterion, optimizer=optimizer,
-                                                          scheduler=scheduler, grad_acc_steps=grad_acc_steps, assess=assess)
+                                                          scheduler=scheduler, assess=assess)
             t.set_postfix(tr_loss_lr=f"{float(tr_loss):.4f}/{tr_lr:.6f}")
 
     return tr_logits, tr_labels, tr_loss
 
-def train_model(model, optimizer, criterion, train_loader, val_loader, scheduler, grad_acc_steps, metric, exp_path):
+def train_model(model, optimizer, criterion, train_loader, val_loader, epochs, evaluate_every, scheduler, metric, exp_path):
 
-    n_cycles = len(scheduler.cycle_lens)
-    best_auc, best_dice, best_cycle = 0, 0, 0
+    best_auc, best_dice, best_epoch = 0, 0, 0
     is_better, best_monitoring_metric = compare_op(metric)
 
-    for cycle in range(n_cycles):
-        print(f'Cycle {cycle+1:d}/{n_cycles:d}')
-        # train one cycle, retrieve segmentation data and compute metrics at the end of cycle
-        tr_logits, tr_labels, tr_loss = train_one_cycle(train_loader, model, criterion, optimizer, scheduler, grad_acc_steps, cycle)
+    with tqdm(range(1, epochs+1), initial=1) as t:
+        for epoch in t:
+            model.train()
+            if epoch%evaluate_every==0:
+                assess=True # only get logits/labels when evaluating
+            else:
+                assess = False
+            tr_logits, tr_labels, tr_loss, tr_lr = run_one_epoch(train_loader, model, criterion, optimizer=optimizer,
+                                                        scheduler=scheduler, assess=assess)
+            
+            t.set_postfix(epoch=f"{epoch:d}/{epochs:d}", tr_loss_lr=f"{float(tr_loss):.4f}/{tr_lr:.6f}")
 
-        # classification metrics at the end of cycle
-        print(25 * '-' + '  End of cycle, evaluating ' + 25 * '-')
-        tr_auc, tr_dice = evaluate(tr_logits, tr_labels, model.n_classes)  # for n_classes>1, will need to redo evaluate
-        del tr_logits, tr_labels
-        with torch.no_grad():
-            assess=True
-            vl_logits, vl_labels, vl_loss, _ = run_one_epoch(val_loader, model, criterion, assess=assess)
-            vl_auc, vl_dice = evaluate(vl_logits, vl_labels, model.n_classes)  # for n_classes>1, will need to redo evaluate
-            del vl_logits, vl_labels
-        msg = f'Train/Val Loss: {tr_loss:.4f}/{vl_loss:.4f}  -- Train/Val AUC: {tr_auc:.4f}/{vl_auc:.4f}  -- Train/Val DICE: {tr_dice:.4f}/{vl_dice:.4f} -- LR={get_lr(optimizer):.6f}'
-        print(msg.rstrip('0'))
+            if assess:
+                print(25 * '-' + '  Evaluating ' + 25 * '-')
+                tr_auc, tr_dice = evaluate(tr_logits, tr_labels)
 
-        # check if performance was better than anyone before and checkpoint if so
-        if metric == 'auc':
-            monitoring_metric = vl_auc
-        elif metric == 'tr_auc':
-            monitoring_metric = tr_auc
-        elif metric == 'loss':
-            monitoring_metric = vl_loss
-        elif metric == 'dice':
-            monitoring_metric = vl_dice
-        if is_better(monitoring_metric, best_monitoring_metric):
-            print(f'Best {metric} attained. {100*best_monitoring_metric:.2f} --> {100*monitoring_metric:.2f}')
-            best_auc, best_dice, best_cycle = vl_auc, vl_dice, cycle+1
-            best_monitoring_metric = monitoring_metric
-            if exp_path is not None:
-                print(25 * '-', ' Checkpointing ', 25 * '-')
-                save_model(exp_path, model, optimizer)
+                with torch.no_grad():
+                    assess=True
+                    vl_logits, vl_labels, vl_loss, _ = run_one_epoch(val_loader, model, criterion, assess=assess)
+                    vl_auc, vl_dice = evaluate(vl_logits, vl_labels)
+                    del vl_logits, vl_labels
+                msg = f'Train/Val Loss: {tr_loss:.4f}/{vl_loss:.4f}  -- Train/Val AUC: {tr_auc:.4f}/{vl_auc:.4f}  -- Train/Val DICE: {tr_dice:.4f}/{vl_dice:.4f} -- LR={get_lr(optimizer):.6f}'
+                print(msg.rstrip('0'))
+
+                # check if performance was better than anyone before and checkpoint if so
+                if metric == 'auc':
+                    monitoring_metric = vl_auc
+                elif metric == 'tr_auc':
+                    monitoring_metric = tr_auc
+                elif metric == 'loss':
+                    monitoring_metric = vl_loss
+                elif metric == 'dice':
+                    monitoring_metric = vl_dice
+                if is_better(monitoring_metric, best_monitoring_metric):
+                    print(f'Best {metric} attained. {100*best_monitoring_metric:.2f} --> {100*monitoring_metric:.2f}')
+                    best_auc, best_dice, best_epoch = vl_auc, vl_dice, epoch
+                    best_monitoring_metric = monitoring_metric
+                    if exp_path is not None:
+                        print(25 * '-', ' Checkpointing ', 25 * '-')
+                        save_model(exp_path, model, optimizer)
 
     del model
     torch.cuda.empty_cache()
-    return best_auc, best_dice, best_cycle
+    
+    return best_auc, best_dice, best_epoch
 
 def main(args):
 
@@ -193,12 +187,9 @@ def main(args):
 
     # gather parser parameters
     model_name = args.model_name
-    max_lr, bs, grad_acc_steps = args.max_lr, args.batch_size, args.grad_acc_steps
-    cycle_lens, metric = args.cycle_lens.split('/'), args.metric
-    cycle_lens = list(map(int, cycle_lens))
-
-    if len(cycle_lens)==2: # handles option of specifying cycles as pair (n_cycles, cycle_len)
-        cycle_lens = cycle_lens[0]*[cycle_lens[1]]  # [50, 50, 50, ...]
+    max_lr, bs = args.max_lr, args.batch_size
+    epochs, evaluate_every = args.epochs, args.evaluate_every
+    metric = args.metric
 
     im_size = tuple([int(item) for item in args.im_size.split(',')])
     if isinstance(im_size, tuple) and len(im_size)==1:
@@ -241,24 +232,23 @@ def main(args):
     print(f"Total params: {num_p:,}")
     optimizer = torch.optim.Adam(model.parameters(), lr=max_lr)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cycle_lens[0] * len(train_loader), eta_min=0)
+    scheduler = torch.optim.lr_scheduler.PolynomialLR(optimizer, total_iters=epochs*len(train_loader), power=0.9)
     setattr(optimizer, 'max_lr', max_lr)  # store it inside the optimizer for accessing to it later
-    setattr(scheduler, 'cycle_lens', cycle_lens)
 
     criterion = torch.nn.BCEWithLogitsLoss() if model.n_classes == 1 else torch.nn.CrossEntropyLoss()
 
     print('* Instantiating loss function', str(criterion))
     print('* Starting to train\n','-' * 10)
 
-    m1, m2, m3 = train_model(model, optimizer, criterion, train_loader, val_loader, scheduler, grad_acc_steps, metric, experiment_path)
+    m1, m2, m3 = train_model(model, optimizer, criterion, train_loader, val_loader, epochs, evaluate_every, scheduler, metric, experiment_path)
 
     print(f"val_auc: {m1}")
     print(f"val_dice: {m2}")
-    print(f"best_cycle: {m3}")
+    print(f"best_epoch: {m3}")
     if do_not_save is False:
 
         with open(osp.join(experiment_path, 'val_metrics.txt'), 'w') as f:
-            print(f'Best AUC = {100*m1:.2f}\nBest DICE = {100*m2:.2f}\nBest cycle = {m3}', file=f)
+            print(f'Best AUC = {100*m1:.2f}\nBest DICE = {100*m2:.2f}\nBest epoch = {m3}', file=f)
 
 def get_args():
 
@@ -267,9 +257,9 @@ def get_args():
     parser.add_argument('--csv_train', type=str, default='data/DRIVE/train.csv', help='path to training data csv')
     parser.add_argument('--model_name', type=str, default='unet', help='architecture')
     parser.add_argument('--batch_size', type=int, default=4, help='batch Size')
-    parser.add_argument('--grad_acc_steps', type=int, default=0, help='gradient accumulation steps (0)')
     parser.add_argument('--max_lr', type=float, default=0.01, help='learning rate')
-    parser.add_argument('--cycle_lens', type=str, default='20/50', help='cycling config (nr cycles/cycle len')
+    parser.add_argument('--epochs', type=int, default=1000, help='number of epochs to train')
+    parser.add_argument('--evaluate_every', type=int, default=50, help='number of epochs between model evaluations')
     parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
     parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
     parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
