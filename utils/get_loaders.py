@@ -1,5 +1,6 @@
 import random
 import os.path as osp
+from jinja2 import pass_context
 import pandas as pd
 from PIL import Image
 import numpy as np
@@ -10,7 +11,6 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2 as tv_transf
 from torchvision.transforms.v2 import functional as F
 from torchvision import tv_tensors
-from . import paired_transforms_tv04 as p_tr
 
 class TrainDataset(Dataset):
     def __init__(self, csv_path, transforms=None, label_values=None):
@@ -42,7 +42,7 @@ class TrainDataset(Dataset):
         target = Image.open(self.gt_list[index])
         mask = Image.open(self.mask_list[index]).convert('L')
 
-        img, target, mask = self.crop_to_fov(img, target, mask)
+        #img, target, mask = self.crop_to_fov(img, target, mask)
 
         target = self.label_encoding(target)
 
@@ -70,7 +70,8 @@ class TestDataset(Dataset):
         df = pd.read_csv(csv_path)
         self.im_list = df.im_paths
         self.mask_list = df.mask_paths
-        self.tg_size = tg_size
+        
+        self.tranforms = TestTransforms(tg_size)
 
     def crop_to_fov(self, img, mask):
         mask = np.array(mask).astype(int)
@@ -82,74 +83,148 @@ class TestDataset(Dataset):
         # # load image and mask
         img = Image.open(self.im_list[index])
         mask = Image.open(self.mask_list[index]).convert('L')
-        img, coords_crop = self.crop_to_fov(img, mask)
+        #img, coords_crop = self.crop_to_fov(img, mask)
         original_sz = img.size[1], img.size[0]  # in numpy convention
+        coords_crop = [0, 0, original_sz[0], original_sz[1]]
 
-        img = F.pil_to_tensor(img)
-        img = F.resize(img, self.tg_size)
-        img = F.to_dtype(img, torch.float32, scale=True)
+        img = self.tranforms(img)
 
         return img, np.array(mask).astype(bool), coords_crop, original_sz, self.im_list[index]
 
     def __len__(self):
         return len(self.im_list)
 
-def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), label_values=(0, 255)):
+class TrainTransforms:
 
-    train_dataset = TrainDataset(csv_path=csv_path_train, label_values=label_values)
-    val_dataset = TrainDataset(csv_path=csv_path_val, label_values=label_values)
-    # transforms definition
-    # required transforms
-    def train_t(img, target):
+    def __init__(self, tg_size):
+
+        self.tg_size = tg_size
+
+        crop = tv_transf.CenterCrop((584, 560))
 
         scale = tv_transf.RandomAffine(degrees=0, scale=(0.95, 1.20))
         transl = tv_transf.RandomAffine(degrees=0, translate=(0.05, 0))
         rotate = tv_transf.RandomRotation(degrees=45)
-        scale_transl_rot = [scale, transl, rotate]
+        scale_transl_rot = tv_transf.RandomChoice((scale, transl, rotate))
+
         brightness, contrast, saturation, hue = 0.25, 0.25, 0.25, 0.01
         jitter = tv_transf.ColorJitter(brightness, contrast, saturation, hue)
 
-        img = F.pil_to_tensor(img)
-        target = F.pil_to_tensor(target)
+        hflip = tv_transf.RandomHorizontalFlip()
+        vflip = tv_transf.RandomVerticalFlip()
 
-        img = F.resize(img, tg_size)
-        target = F.resize(target, tg_size, interpolation=tv_transf.InterpolationMode.NEAREST_EXACT)
+        to_dtype = tv_transf.ToDtype(
+            {
+                tv_tensors.Image: torch.float32,
+                tv_tensors.Mask: torch.int64
+            },
+            scale=True   # Mask is not scaled
+        )
 
-        idx = random.randint(0,2)
-        t = scale_transl_rot[idx]
-        params = t._get_params([img])
-        if idx==2:
-            img = F.rotate(img, **params,  interpolation=tv_transf.InterpolationMode.BILINEAR, fill=0)
-            target = F.rotate(target, **params, fill=0)
-        else:
-            img = F.affine(img, **params, fill=0)
-            target = F.affine(target, **params, fill=0)
-        img = jitter(img)
+        unwrap = tv_transf.ToPureTensor()
+
+        self.transform = tv_transf.Compose((
+            crop,
+            scale_transl_rot,
+            #jitter,
+            hflip,
+            vflip,
+            to_dtype,
+            unwrap
+        ))
+
+    def __call__(self, img, target):
+
+        #img = F.resize(img, self.tg_size)
+        # NEAREST_EXACT has a 0.01 better Dice score than NEAREST. The
+        # object oriented version of resize uses NEAREST, thus we need to use
+        # the functional interface
+        #target = F.resize(target, self.tg_size, interpolation=tv_transf.InterpolationMode.NEAREST_EXACT)
+
+        img = tv_tensors.Image(img)
+        target = tv_tensors.Mask(target)
+
+        img, target = self.transform(img, target)
+        target = target.mul(255)[0]
+
+        return img, target
+
+class ValidTransforms:
+
+    def __init__(self, tg_size):
         
-        if random.random() < 0.5:
-            img, target = F.hflip(img), F.hflip(target)
-        if random.random() < 0.5:
-            img, target = F.vflip(img), F.vflip(target)
+        self.tg_size = tg_size
 
-        img = F.to_dtype(img, torch.float32, scale=True)
-        target = F.to_dtype(target, torch.int64, scale=False).mul(255)[0]
+        crop = tv_transf.CenterCrop((584, 560))
+
+        to_dtype = tv_transf.ToDtype(
+            {
+                tv_tensors.Image: torch.float32,
+                tv_tensors.Mask: torch.int64
+            },
+            scale=True   # Mask is not scaled
+        )
+
+        unwrap = tv_transf.ToPureTensor()
+
+        self.transform = tv_transf.Compose((
+            crop,
+            to_dtype,
+            unwrap
+        ))
+
+    def __call__(self, img, target):
+        
+        #img = F.resize(img, self.tg_size)
+        # NEAREST_EXACT has a 0.01 better Dice score than NEAREST. The
+        # object oriented version of resize uses NEAREST, thus we need to use
+        # the functional interface
+        #target = F.resize(target, self.tg_size, interpolation=tv_transf.InterpolationMode.NEAREST_EXACT)
+
+        img = tv_tensors.Image(img)
+        target = tv_tensors.Mask(target)
+
+        img, target = self.transform(img, target)
+        target = target.mul(255)[0]
 
         return img, target
-    
-    def val_t(img, target):
 
-        img = F.resize(img, tg_size)
-        target = F.resize(target, tg_size, interpolation=tv_transf.InterpolationMode.NEAREST)      
-        img = F.pil_to_tensor(img)
-        target = F.pil_to_tensor(target)[0]
+class TestTransforms:
 
-        img = F.to_dtype(img, torch.float32, scale=True)
-        target = F.to_dtype(target, torch.int64, scale=False).mul(255)
+    def __init__(self, tg_size):
 
-        return img, target
+        self.tg_size = tg_size
 
-    train_dataset.transforms = train_t
-    val_dataset.transforms = val_t
+        crop = tv_transf.CenterCrop((584, 560))
+
+        to_dtype = tv_transf.ToDtype(
+            torch.float32,
+            scale=True
+        )
+
+        unwrap = tv_transf.ToPureTensor()
+
+        self.transform = tv_transf.Compose((
+            crop,
+            to_dtype,
+            unwrap
+        ))
+
+    def __call__(self, img):
+
+        img = tv_tensors.Image(img)
+        #img = F.resize(img, self.tg_size)
+        img = self.transform(img)
+
+        return img
+
+def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), label_values=(0, 255)):
+
+    train_dataset = TrainDataset(csv_path=csv_path_train, label_values=label_values)
+    val_dataset = TrainDataset(csv_path=csv_path_val, label_values=label_values)
+
+    train_dataset.transforms = TrainTransforms(tg_size)
+    val_dataset.transforms = ValidTransforms(tg_size)
 
     return train_dataset, val_dataset
 

@@ -2,6 +2,7 @@ import sys
 import json
 import os
 import os.path as osp
+import random
 import argparse
 from datetime import datetime
 import operator
@@ -13,7 +14,6 @@ from models.get_model import get_arch
 from utils.get_loaders import get_train_val_loaders
 from utils.evaluation import evaluate
 from utils.model_saving_loading import save_model, str2bool
-from utils.reproducibility import set_seeds
 
 def compare_op(metric):
     """
@@ -33,6 +33,16 @@ def compare_op(metric):
         raise NotImplementedError
 
     return op, init
+
+def set_seeds(seed_value, use_cuda):
+    np.random.seed(seed_value)  # cpu vars
+    torch.manual_seed(seed_value)  # cpu  vars
+    random.seed(seed_value)  # Python
+    if use_cuda:
+        torch.cuda.manual_seed(seed_value)
+        # torch.cuda.manual_seed_all(seed_value)  # gpu vars
+        torch.backends.cudnn.deterministic = True  # needed
+        torch.backends.cudnn.benchmark = False
 
 def reduce_lr(optimizer, epoch, factor=0.1, verbose=True):
     for i, param_group in enumerate(optimizer.param_groups):
@@ -188,7 +198,7 @@ def main(args):
     cycle_lens = list(map(int, cycle_lens))
 
     if len(cycle_lens)==2: # handles option of specifying cycles as pair (n_cycles, cycle_len)
-        cycle_lens = cycle_lens[0]*[cycle_lens[1]]
+        cycle_lens = cycle_lens[0]*[cycle_lens[1]]  # [50, 50, 50, ...]
 
     im_size = tuple([int(item) for item in args.im_size.split(',')])
     if isinstance(im_size, tuple) and len(im_size)==1:

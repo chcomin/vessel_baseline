@@ -122,7 +122,6 @@ def main(args):
     path_train_preds = args.path_train_preds
     path_test_preds = args.path_test_preds
     cut_off = args.cut_off
-    public = str2bool(args.public)
 
     if test_dataset in ['HRF', 'DR_HAGIS']:
         print(100*'-')
@@ -183,9 +182,7 @@ def main(args):
     else:
         print('-- Testing on same data source as training')
 
-    if public: 
-        path_test_csv = osp.join('data', test_dataset, csv_name)
-    else: path_test_csv = osp.join('private_data', test_dataset, csv_name)
+    path_test_csv = osp.join('data', test_dataset, csv_name)
 
     preds, gts = get_labels_preds(path_test_preds, csv_path = path_test_csv)
     global_auc_test, acc_test, dice_test, mcc_test, spec_test, sens_test, _ = \
@@ -215,7 +212,6 @@ def get_args():
     parser.add_argument('--path_train_preds', type=str, default=None, help='path to training predictions')
     parser.add_argument('--path_test_preds', type=str, default=None, help='path to test predictions')
     parser.add_argument('--cut_off', type=str, default='dice', help='threshold maximizing x, x=dice/acc/youden')
-    parser.add_argument('--public', type=str2bool, nargs='?', const=True, default=True, help='public or private dataset')
 
     return parser.parse_args()
 

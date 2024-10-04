@@ -25,25 +25,6 @@ def fast_auc(actual, predicted):
     n_neg = len(actual) - n_pos
     return (np.sum(r[actual==1]) - n_pos*(n_pos+1)/2) / n_pos / n_neg
 
-def ewma(data, window=5):
-    # exponetially-weighted moving averages
-    data = np.array(data)
-    alpha = 2 /(window + 1.0)
-    alpha_rev = 1-alpha
-
-    scale = 1/alpha_rev
-    n = data.shape[0]
-
-    r = np.arange(n)
-    scale_arr = scale**r
-    offset = data[0]*alpha_rev**(r+1)
-    pw0 = alpha*alpha_rev**(n-1)
-
-    mult = data*pw0*scale_arr
-    cumsums = mult.cumsum()
-    out = offset + cumsums*scale_arr[::-1]
-    return out
-
 def evaluate(logits, labels, n_classes, ignore_index = -100, fast=False):
 
     all_probs_0 = []
