@@ -143,7 +143,7 @@ def main(args):
         csv_path = osp.join('data', train_dataset, 'train_full_res.csv')
     preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
     os.makedirs(save_path, exist_ok=True)
-    metrics =compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
+    metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
     global_auc_tr, acc_tr, dice_tr, mcc_tr, spec_tr, sens_tr, opt_thresh_tr = metrics
 
     perf_df_train = pd.DataFrame({'auc': global_auc_tr,
