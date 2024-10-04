@@ -1,3 +1,4 @@
+import random
 import os.path as osp
 import pandas as pd
 from PIL import Image
@@ -7,6 +8,9 @@ import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 from . import paired_transforms_tv04 as p_tr
+from torchvision.transforms import v2 as tv_transf
+from torchvision.transforms.v2 import functional as F
+from torchvision import tv_tensors
 
 class TrainDataset(Dataset):
     def __init__(self, csv_path, transforms=None, label_values=None):
@@ -15,6 +19,7 @@ class TrainDataset(Dataset):
         self.gt_list = df.gt_paths
         self.mask_list = df.mask_paths
         self.transforms = transforms
+        self.conversion = None
         self.label_values = label_values  # for use in label_encoding
 
     def label_encoding(self, gdt):
@@ -49,7 +54,6 @@ class TrainDataset(Dataset):
         if self.transforms is not None:
             img, target = self.transforms(img, target)
 
-
         # QUICK HACK FOR PSEUDO_SEG IN VESSELS, BUT IT SPOILS A/V
         if len(self.label_values)==2: # vessel segmentation case
             target = target.float()
@@ -81,17 +85,9 @@ class TestDataset(Dataset):
         img, coords_crop = self.crop_to_fov(img, mask)
         original_sz = img.size[1], img.size[0]  # in numpy convention
 
-        # # load image and mask
-        # img = Image.open(self.im_list[index])
-        # original_sz = img.size[1], img.size[0]  # in numpy convention
-        # mask = Image.open(self.mask_list[index]).convert('L')
-        # img, coords_crop = self.crop_to_fov(img, mask)
-        # print(self.im_list[index], 'original size inside dataset', original_sz)
-
-        rsz = p_tr.Resize(self.tg_size)
-        tnsr = p_tr.ToTensor()
-        tr = p_tr.Compose([rsz, tnsr])
-        img = tr(img)  # only transform image
+        img = F.pil_to_tensor(img)
+        img = F.resize(img, self.tg_size)
+        img = F.to_dtype(img, torch.float32, scale=True)
 
         return img, np.array(mask).astype(bool), coords_crop, original_sz, self.im_list[index]
 
@@ -104,23 +100,56 @@ def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), lab
     val_dataset = TrainDataset(csv_path=csv_path_val, label_values=label_values)
     # transforms definition
     # required transforms
-    resize = p_tr.Resize(tg_size)
-    tensorizer = p_tr.ToTensor()
-    # geometric transforms
-    h_flip = p_tr.RandomHorizontalFlip()
-    v_flip = p_tr.RandomVerticalFlip()
-    rotate = p_tr.RandomRotation(degrees=45, fill=0, fill_tg=(0,))
-    scale = p_tr.RandomAffine(degrees=0, scale=(0.95, 1.20))
-    transl = p_tr.RandomAffine(degrees=0, translate=(0.05, 0))
-    # either translate, rotate, or scale
-    scale_transl_rot = p_tr.RandomChoice([scale, transl, rotate])
-    # intensity transforms
-    brightness, contrast, saturation, hue = 0.25, 0.25, 0.25, 0.01
-    jitter = p_tr.ColorJitter(brightness, contrast, saturation, hue)
-    train_transforms = p_tr.Compose([resize,  scale_transl_rot, jitter, h_flip, v_flip, tensorizer])
-    val_transforms = p_tr.Compose([resize, tensorizer])
-    train_dataset.transforms = train_transforms
-    val_dataset.transforms = val_transforms
+    def train_t(img, target):
+
+        scale = tv_transf.RandomAffine(degrees=0, scale=(0.95, 1.20))
+        transl = tv_transf.RandomAffine(degrees=0, translate=(0.05, 0))
+        rotate = tv_transf.RandomRotation(degrees=45)
+        scale_transl_rot = [scale, transl, rotate]
+        brightness, contrast, saturation, hue = 0.25, 0.25, 0.25, 0.01
+        jitter = tv_transf.ColorJitter(brightness, contrast, saturation, hue)
+
+        img = F.pil_to_tensor(img)
+        target = F.pil_to_tensor(target)
+
+        img = F.resize(img, tg_size)
+        target = F.resize(target, tg_size, interpolation=tv_transf.InterpolationMode.NEAREST_EXACT)
+
+        idx = random.randint(0,2)
+        t = scale_transl_rot[idx]
+        params = t._get_params([img])
+        if idx==2:
+            img = F.rotate(img, **params,  interpolation=tv_transf.InterpolationMode.BILINEAR, fill=0)
+            target = F.rotate(target, **params, fill=0)
+        else:
+            img = F.affine(img, **params, fill=0)
+            target = F.affine(target, **params, fill=0)
+        img = jitter(img)
+        
+        if random.random() < 0.5:
+            img, target = F.hflip(img), F.hflip(target)
+        if random.random() < 0.5:
+            img, target = F.vflip(img), F.vflip(target)
+
+        img = F.to_dtype(img, torch.float32, scale=True)
+        target = F.to_dtype(target, torch.int64, scale=False).mul(255)[0]
+
+        return img, target
+    
+    def val_t(img, target):
+
+        img = F.resize(img, tg_size)
+        target = F.resize(target, tg_size, interpolation=tv_transf.InterpolationMode.NEAREST)      
+        img = F.pil_to_tensor(img)
+        target = F.pil_to_tensor(target)[0]
+
+        img = F.to_dtype(img, torch.float32, scale=True)
+        target = F.to_dtype(target, torch.int64, scale=False).mul(255)
+
+        return img, target
+
+    train_dataset.transforms = train_t
+    val_dataset.transforms = val_t
 
     return train_dataset, val_dataset
 
