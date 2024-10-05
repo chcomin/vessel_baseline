@@ -14,6 +14,7 @@ from torchvision import tv_tensors
 class TrainDataset(Dataset):
     def __init__(self, csv_path, transforms=None, label_values=None, channels='all'):
         df = pd.read_csv(csv_path)
+        self.root = osp.dirname(csv_path)
         self.im_list = df.im_paths
         self.gt_list = df.gt_paths
         self.mask_list = df.mask_paths
@@ -37,9 +38,9 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, index):
         # load image and labels
-        img = Image.open(self.im_list[index])
-        target = Image.open(self.gt_list[index])
-        mask = Image.open(self.mask_list[index]).convert('L')
+        img = Image.open(osp.join(self.root,self.im_list[index]))
+        target = Image.open(osp.join(self.root,self.gt_list[index]))
+        mask = Image.open(osp.join(self.root,self.mask_list[index])).convert('L')
 
         if self.channels=='gray':
             img = img.convert('L')
@@ -70,6 +71,7 @@ class TrainDataset(Dataset):
 class TestDataset(Dataset):
     def __init__(self, csv_path, tg_size, channels='all'):
         df = pd.read_csv(csv_path)
+        self.root = osp.dirname(csv_path)
         self.im_list = df.im_paths
         self.mask_list = df.mask_paths
         self.channels = channels
@@ -88,8 +90,8 @@ class TestDataset(Dataset):
 
     def __getitem__(self, index):
         # # load image and mask
-        img = Image.open(self.im_list[index])
-        mask = Image.open(self.mask_list[index]).convert('L')
+        img = Image.open(osp.join(self.root,self.im_list[index]))
+        mask = Image.open(osp.join(self.root,self.mask_list[index])).convert('L')
 
         if self.channels=='gray':
             img = img.convert('L')
@@ -223,8 +225,11 @@ class TestTransforms:
 
 def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), label_values=(0, 255), channels='all'):
 
-    train_dataset = TrainDataset(csv_path=csv_path_train, label_values=label_values, channels=channels)
-    val_dataset = TrainDataset(csv_path=csv_path_val, label_values=label_values, channels=channels)
+    train_dataset = TrainDataset(
+        csv_path=csv_path_train, label_values=label_values, channels=channels
+        )
+    val_dataset = TrainDataset(
+        csv_path=csv_path_val, label_values=label_values, channels=channels)
 
     train_dataset.transforms = TrainTransforms(tg_size)
     val_dataset.transforms = ValidTransforms(tg_size)
@@ -232,7 +237,9 @@ def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), lab
     return train_dataset, val_dataset
 
 def get_train_val_loaders(csv_path_train, csv_path_val, batch_size=4, tg_size=(512, 512), label_values=(0, 255), channels='all', num_workers=0):
-    train_dataset, val_dataset = get_train_val_datasets(csv_path_train, csv_path_val, tg_size=tg_size, label_values=label_values, channels=channels)
+    train_dataset, val_dataset = get_train_val_datasets(
+        csv_path_train, csv_path_val, tg_size=tg_size, label_values=label_values, channels=channels
+        )
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=torch.cuda.is_available(), shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=torch.cuda.is_available())

@@ -20,14 +20,15 @@ from utils.model_saving_loading import str2bool
 def get_labels_preds(path_to_preds, csv_path):
     df = pd.read_csv(csv_path)
     im_paths, mask_paths, gt_paths = df.im_paths, df.mask_paths, df.gt_paths
+    root = osp.dirname(csv_path)
     all_preds = []
     all_gts = []
     for im_path, gt_path, mask_path in zip(im_paths, gt_paths, mask_paths):
         im_path = im_path.rsplit('/', 1)[-1]
         pred_path = osp.join(path_to_preds, im_path[:-4] + '.png')
 
-        gt = np.array(Image.open(gt_path)).astype(bool)
-        mask = np.array(Image.open(mask_path).convert('L')).astype(bool)
+        gt = np.array(Image.open(osp.join(root,gt_path))).astype(bool)
+        mask = np.array(Image.open(osp.join(root,mask_path)).convert('L')).astype(bool)
         try:
             pred = img_as_float(np.array(Image.open(pred_path)))
         except FileNotFoundError:
@@ -137,9 +138,9 @@ def main(args):
     save_path = osp.join(path_train_preds, 'perf')
 
     perf_csv_path = osp.join(save_path, 'training_performance.csv')
-    csv_path = osp.join('data', train_dataset, 'train.csv')
+    csv_path = osp.join('../data', train_dataset, 'train.csv')
     if 'HRF' in train_dataset:
-        csv_path = osp.join('data', train_dataset, 'train_full_res.csv')
+        csv_path = osp.join('../data', train_dataset, 'train_full_res.csv')
     preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
     os.makedirs(save_path, exist_ok=True)
     metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
@@ -156,9 +157,9 @@ def main(args):
 
     print(f'* Analyzing performance in {train_dataset} validation set')
     perf_csv_path = osp.join(save_path, 'validation_performance.csv')
-    csv_path = osp.join('data', train_dataset, 'val.csv')
+    csv_path = osp.join('../data', train_dataset, 'val.csv')
     if 'HRF' in train_dataset:
-        csv_path = osp.join('data', train_dataset, 'val_full_res.csv')
+        csv_path = osp.join('../data', train_dataset, 'val_full_res.csv')
     preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
     metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=opt_thresh_tr, cut_off=cut_off, mode='train')
     global_auc_vl, acc_vl, dice_vl, mcc_vl, spec_vl, sens_vl, _ = metrics
@@ -182,7 +183,7 @@ def main(args):
     else:
         print('-- Testing on same data source as training')
 
-    path_test_csv = osp.join('data', test_dataset, csv_name)
+    path_test_csv = osp.join('../data', test_dataset, csv_name)
 
     preds, gts = get_labels_preds(path_test_preds, csv_path = path_test_csv)
     global_auc_test, acc_test, dice_test, mcc_test, spec_test, sens_test, _ = \

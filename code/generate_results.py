@@ -110,7 +110,7 @@ def main(args):
     else:
         sys.exit('im_size should be a number or a tuple of two numbers')
 
-    data_path = osp.join('data', dataset)
+    data_path = osp.join('../data', dataset)
 
     csv_path = 'test_all.csv'
     print('* Reading test data from ' + osp.join(data_path, csv_path))
@@ -125,7 +125,7 @@ def main(args):
         sys.exit('---- bad config specification (check layers, n_classes, etc.) ---- ')
     model.eval()
 
-    save_results_path = osp.join(args.result_path, dataset, experiment_path)
+    save_results_path = osp.join(args.result_path, osp.basename(experiment_path))
     print('* Saving predictions to ' + save_results_path)
     times = []
     for i in tqdm(range(len(test_dataset))):
@@ -150,7 +150,7 @@ def get_args():
     parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
     parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
     parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
-    parser.add_argument('--result_path', type=str, default='results', help='path to save predictions (defaults to results')
+    parser.add_argument('--result_path', type=str, default='../results', help='path to save predictions (defaults to results')
 
     return parser.parse_args()
 

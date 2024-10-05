@@ -216,7 +216,7 @@ def main(args):
         save_path = args.save_path
         if save_path == 'date_time':
             save_path = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-        experiment_path=osp.join('experiments', save_path)
+        experiment_path=osp.join('../experiments', save_path)
         args.experiment_path = experiment_path
         os.makedirs(experiment_path, exist_ok=True)
 
