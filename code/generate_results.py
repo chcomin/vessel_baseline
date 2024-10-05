@@ -156,6 +156,6 @@ def get_args():
 
 if __name__ == '__main__':
 
-    args = get_args()
-    main(args)
+    _args = get_args()
+    main(_args)
 

@@ -11,7 +11,6 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix, accuracy_score
 from sklearn.metrics import matthews_corrcoef
 from skimage import img_as_float
 from utils.evaluation import dice_score
-from utils.model_saving_loading import str2bool
 
 # future-self: dice and f1 are the same thing, but if you use f1_score from sklearn it will be much slower, the reason
 # being that dice here expects bools and it won't work in multi-class scenarios. Same goes for accuracy_score.
@@ -218,5 +217,5 @@ def get_args():
 
 if __name__ == '__main__':
 
-    args = get_args()
-    main(args)
+    _args = get_args()
+    main(_args)

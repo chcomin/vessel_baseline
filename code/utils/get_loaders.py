@@ -1,4 +1,3 @@
-import random
 import os.path as osp
 import pandas as pd
 from PIL import Image
