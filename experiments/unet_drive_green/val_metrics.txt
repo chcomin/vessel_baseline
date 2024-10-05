@@ -1,0 +1,3 @@
+Best AUC = 98.44
+Best DICE = 80.27
+Best epoch = 950

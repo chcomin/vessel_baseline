@@ -1,0 +1,11 @@
+im_paths,gt_paths,mask_paths
+data/VessMAP/images/2546.tiff,data/VessMAP/annotator1/labels/2546.png,data/VessMAP/mask/2546.png
+data/VessMAP/images/11161.tiff,data/VessMAP/annotator1/labels/11161.png,data/VessMAP/mask/11161.png
+data/VessMAP/images/3882.tiff,data/VessMAP/annotator1/labels/3882.png,data/VessMAP/mask/3882.png
+data/VessMAP/images/8990.tiff,data/VessMAP/annotator1/labels/8990.png,data/VessMAP/mask/8990.png
+data/VessMAP/images/14440.tiff,data/VessMAP/annotator1/labels/14440.png,data/VessMAP/mask/14440.png
+data/VessMAP/images/13128.tiff,data/VessMAP/annotator1/labels/13128.png,data/VessMAP/mask/13128.png
+data/VessMAP/images/356.tiff,data/VessMAP/annotator1/labels/356.png,data/VessMAP/mask/356.png
+data/VessMAP/images/8493.tiff,data/VessMAP/annotator1/labels/8493.png,data/VessMAP/mask/8493.png
+data/VessMAP/images/17584.tiff,data/VessMAP/annotator1/labels/17584.png,data/VessMAP/mask/17584.png
+data/VessMAP/images/14121.tiff,data/VessMAP/annotator1/labels/14121.png,data/VessMAP/mask/14121.png
