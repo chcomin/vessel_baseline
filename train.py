@@ -190,6 +190,18 @@ def main(args):
     max_lr, bs = args.max_lr, args.batch_size
     epochs, evaluate_every = args.epochs, args.evaluate_every
     metric = args.metric
+    in_c = args.in_c
+    use_green = args.use_green
+
+    if in_c==3 and use_green==True:
+        raise ValueError('Parameter use_green was changed to True, but in_c=3.')
+    if in_c==3:
+        channels = 'all'
+    elif in_c==1:
+        if use_green:
+            channels = 'green'
+        else:
+            channels = 'gray'
 
     im_size = tuple([int(item) for item in args.im_size.split(',')])
     if isinstance(im_size, tuple) and len(im_size)==1:
@@ -222,10 +234,12 @@ def main(args):
 
 
     print(f"* Creating Dataloaders, batch size = {bs}, workers = {args.num_workers}")
-    train_loader, val_loader = get_train_val_loaders(csv_path_train=csv_train, csv_path_val=csv_val, batch_size=bs, tg_size=tg_size, label_values=label_values, num_workers=args.num_workers)
+    train_loader, val_loader = get_train_val_loaders(csv_path_train=csv_train, csv_path_val=csv_val, batch_size=bs, 
+                                                     tg_size=tg_size, label_values=label_values, channels=channels,
+                                                     num_workers=args.num_workers)
 
     print(f'* Instantiating a {model_name} model')
-    model = get_arch(model_name, in_c=args.in_c, n_classes=n_classes)
+    model = get_arch(model_name, in_c=in_c, n_classes=n_classes)
     model = model.to(device)
 
     num_p = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -263,6 +277,7 @@ def get_args():
     parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
     parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
     parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
+    parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
     parser.add_argument('--do_not_save', type=str2bool, nargs='?', const=True, default=False, help='avoid saving anything')
     parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
     parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')

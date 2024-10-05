@@ -12,12 +12,13 @@ from torchvision.transforms.v2 import functional as tv_transf_F
 from torchvision import tv_tensors
 
 class TrainDataset(Dataset):
-    def __init__(self, csv_path, transforms=None, label_values=None):
+    def __init__(self, csv_path, transforms=None, label_values=None, channels='all'):
         df = pd.read_csv(csv_path)
         self.im_list = df.im_paths
         self.gt_list = df.gt_paths
         self.mask_list = df.mask_paths
         self.transforms = transforms
+        self.channels = channels
         self.label_values = label_values  # for use in label_encoding
 
     def label_encoding(self, gdt):
@@ -39,6 +40,11 @@ class TrainDataset(Dataset):
         img = Image.open(self.im_list[index])
         target = Image.open(self.gt_list[index])
         mask = Image.open(self.mask_list[index]).convert('L')
+
+        if self.channels=='gray':
+            img = img.convert('L')
+        elif self.channels=='green':
+            img = Image.fromarray(np.array(img)[:,:,1])
 
         img, target, mask = self.crop_to_fov(img, target, mask)
 
@@ -62,10 +68,11 @@ class TrainDataset(Dataset):
         return len(self.im_list)
 
 class TestDataset(Dataset):
-    def __init__(self, csv_path, tg_size):
+    def __init__(self, csv_path, tg_size, channels='all'):
         df = pd.read_csv(csv_path)
         self.im_list = df.im_paths
         self.mask_list = df.mask_paths
+        self.channels = channels
         self.tranforms = TestTransforms(tg_size)
 
     def crop_to_fov(self, img, mask):
@@ -83,6 +90,12 @@ class TestDataset(Dataset):
         # # load image and mask
         img = Image.open(self.im_list[index])
         mask = Image.open(self.mask_list[index]).convert('L')
+
+        if self.channels=='gray':
+            img = img.convert('L')
+        elif self.channels=='green':
+            img = Image.fromarray(np.array(img)[:,:,1])
+
         img, coords_crop = self.crop_to_fov(img, mask)
         original_sz = img.size[1], img.size[0]  # in numpy convention
 
@@ -208,26 +221,26 @@ class TestTransforms:
 
         return img
 
-def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), label_values=(0, 255)):
+def get_train_val_datasets(csv_path_train, csv_path_val, tg_size=(512, 512), label_values=(0, 255), channels='all'):
 
-    train_dataset = TrainDataset(csv_path=csv_path_train, label_values=label_values)
-    val_dataset = TrainDataset(csv_path=csv_path_val, label_values=label_values)
+    train_dataset = TrainDataset(csv_path=csv_path_train, label_values=label_values, channels=channels)
+    val_dataset = TrainDataset(csv_path=csv_path_val, label_values=label_values, channels=channels)
 
     train_dataset.transforms = TrainTransforms(tg_size)
     val_dataset.transforms = ValidTransforms(tg_size)
 
     return train_dataset, val_dataset
 
-def get_train_val_loaders(csv_path_train, csv_path_val, batch_size=4, tg_size=(512, 512), label_values=(0, 255), num_workers=0):
-    train_dataset, val_dataset = get_train_val_datasets(csv_path_train, csv_path_val, tg_size=tg_size, label_values=label_values)
+def get_train_val_loaders(csv_path_train, csv_path_val, batch_size=4, tg_size=(512, 512), label_values=(0, 255), channels='all', num_workers=0):
+    train_dataset, val_dataset = get_train_val_datasets(csv_path_train, csv_path_val, tg_size=tg_size, label_values=label_values, channels=channels)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=torch.cuda.is_available(), shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=torch.cuda.is_available())
     return train_loader, val_loader
 
-def get_test_dataset(data_path, csv_path='test.csv', tg_size=(512, 512)):
+def get_test_dataset(data_path, csv_path='test.csv', tg_size=(512, 512), channels='all'):
     # csv_path will only not be test.csv when we want to build training set predictions
     path_test_csv = osp.join(data_path, csv_path)
-    test_dataset = TestDataset(csv_path=path_test_csv, tg_size=tg_size)
+    test_dataset = TestDataset(csv_path=path_test_csv, tg_size=tg_size, channels=channels)
 
     return test_dataset

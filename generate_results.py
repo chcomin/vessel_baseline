@@ -87,6 +87,17 @@ def main(args):
     experiment_path = args.experiment_path # these should exist in a config file
     model_name = args.model_name
     in_c = args.in_c
+    use_green = args.use_green
+
+    if in_c==3 and use_green==1:
+        raise ValueError('Parameter use_green was changed to True, but in_c=3.')
+    if in_c==3:
+        channels = 'all'
+    elif in_c==1:
+        if use_green==1:
+            channels = 'green'
+        else:
+            channels = 'gray'
 
     if experiment_path is None:
         raise ValueError('must specify path to experiment')
@@ -103,7 +114,7 @@ def main(args):
 
     csv_path = 'test_all.csv'
     print('* Reading test data from ' + osp.join(data_path, csv_path))
-    test_dataset = get_test_dataset(data_path, csv_path=csv_path, tg_size=tg_size)
+    test_dataset = get_test_dataset(data_path, csv_path=csv_path, tg_size=tg_size, channels=channels)
     print(f'* Instantiating model  = {str(model_name)}')
     model = get_arch(model_name, in_c=in_c).to(device)
 
@@ -138,6 +149,7 @@ def get_args():
     parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
     parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
     parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
+    parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
     parser.add_argument('--result_path', type=str, default='results', help='path to save predictions (defaults to results')
 
     return parser.parse_args()
