@@ -75,6 +75,7 @@ def main(args):
         device = torch.device(args.device)
 
     dataset = args.dataset
+    split = args.split
     tta = args.tta
 
     # parse config file if provided
@@ -112,7 +113,7 @@ def main(args):
 
     data_path = osp.join('../data', dataset)
 
-    csv_path = 'test_all.csv'
+    csv_path = f'test_all{split}.csv'
     print('* Reading test data from ' + osp.join(data_path, csv_path))
     test_dataset = get_test_dataset(data_path, csv_path=csv_path, tg_size=tg_size, channels=channels)
     print(f'* Instantiating model  = {str(model_name)}')
@@ -143,6 +144,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     required_named = parser.add_argument_group('required arguments')
     required_named.add_argument('--dataset', type=str, help='generate results for which dataset', required=True)
+    parser.add_argument('--split', type=str, default='', help='split to use')
     parser.add_argument('--tta', type=str, default='from_preds', help='test-time augmentation (no/from_logits/from_preds)')
     parser.add_argument('--config_file', type=str, default=None, help='experiments/name_of_config_file, overrides everything')
     # im_size overrides config file

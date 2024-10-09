@@ -101,6 +101,7 @@ def compute_performance(preds, gts, save_path=None, opt_threshold=None, cut_off=
         else:
             opt_threshold = cutoff_youden(fpr, tpr, thresholds)
 
+    #opt_threshold = 0.5
     bin_preds = preds > opt_threshold
 
     acc = accuracy_score(gts, bin_preds)
@@ -117,30 +118,18 @@ def compute_performance(preds, gts, save_path=None, opt_threshold=None, cut_off=
 
 def main(args):
 
-    train_dataset = args.train_dataset
-    test_dataset = args.test_dataset
-    path_train_preds = args.path_train_preds
-    path_test_preds = args.path_test_preds
+    dataset = args.dataset
+    path_preds = args.path_preds
+    split = args.split
     cut_off = args.cut_off
 
-    if test_dataset in ['HRF', 'DR_HAGIS']:
-        print(100*'-')
-        print(8 * '-', ' For ' + test_dataset + ' , performance evaluation is **quite** heavy ', 8 * '-')
-        print(100 * '-')
-    if test_dataset in ['AUCKLAND_0', 'AUCKLAND_50', 'AUCKLAND_100', 'AUCKLAND_150']:
-        print(100 * '-')
-        print(8 * '-', ' For AUCKLAND , performance evaluation is **quite** heavy ', 8 * '-')
-        print(100 * '-')
-
-    print(f'* Analyzing performance in {train_dataset} training set -- Obtaining optimal threshold maximizing {cut_off}')
-    print(f'* Reading predictions from {path_train_preds}')
-    save_path = osp.join(path_train_preds, 'perf')
+    print(f'* Analyzing performance in {dataset} training set -- Obtaining optimal threshold maximizing {cut_off}')
+    print(f'* Reading predictions from {path_preds}')
+    save_path = osp.join(path_preds, 'perf')
 
     perf_csv_path = osp.join(save_path, 'training_performance.csv')
-    csv_path = osp.join('../data', train_dataset, 'train.csv')
-    if 'HRF' in train_dataset:
-        csv_path = osp.join('../data', train_dataset, 'train_full_res.csv')
-    preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
+    csv_path = osp.join('../data', dataset, f'train{split}.csv')
+    preds, gts = get_labels_preds(path_preds, csv_path = csv_path)
     os.makedirs(save_path, exist_ok=True)
     metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
     global_auc_tr, acc_tr, dice_tr, mcc_tr, spec_tr, sens_tr, opt_thresh_tr = metrics
@@ -154,12 +143,10 @@ def main(args):
                                 'opt_t': opt_thresh_tr}, index=[0])
     perf_df_train.to_csv(perf_csv_path, index=False)
 
-    print(f'* Analyzing performance in {train_dataset} validation set')
+    print(f'* Analyzing performance in {dataset} validation set')
     perf_csv_path = osp.join(save_path, 'validation_performance.csv')
-    csv_path = osp.join('../data', train_dataset, 'val.csv')
-    if 'HRF' in train_dataset:
-        csv_path = osp.join('../data', train_dataset, 'val_full_res.csv')
-    preds, gts = get_labels_preds(path_train_preds, csv_path = csv_path)
+    csv_path = osp.join('../data', dataset, f'val{split}.csv')
+    preds, gts = get_labels_preds(path_preds, csv_path = csv_path)
     metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=opt_thresh_tr, cut_off=cut_off, mode='train')
     global_auc_vl, acc_vl, dice_vl, mcc_vl, spec_vl, sens_vl, _ = metrics
     perf_df_train = pd.DataFrame({'auc': global_auc_vl,
@@ -170,21 +157,18 @@ def main(args):
                                   'sens': sens_vl}, index=[0])
     perf_df_train.to_csv(perf_csv_path, index=False)
 
-    print(f'*Analyzing performance in {test_dataset} test set')
-    print(f'* Reading predictions from {path_test_preds}')
-    save_path = osp.join(path_test_preds, 'perf')
+    print(f'*Analyzing performance in {dataset} test set')
+    print(f'* Reading predictions from {path_preds}')
+    save_path = osp.join(path_preds, 'perf')
     os.makedirs(save_path, exist_ok=True)
     perf_csv_path = osp.join(save_path, 'test_performance.csv')
 
-    csv_name = 'test.csv' if train_dataset==test_dataset else 'test_all.csv'
-    if train_dataset!=test_dataset:
-        print('-- Testing on a different dataset (from training)')
-    else:
-        print('-- Testing on same data source as training')
+    csv_name = f'test{split}.csv'
+    print('-- Testing')
 
-    path_test_csv = osp.join('../data', test_dataset, csv_name)
+    path_test_csv = osp.join('../data', dataset, csv_name)
 
-    preds, gts = get_labels_preds(path_test_preds, csv_path = path_test_csv)
+    preds, gts = get_labels_preds(path_preds, csv_path = path_test_csv)
     global_auc_test, acc_test, dice_test, mcc_test, spec_test, sens_test, _ = \
         compute_performance(preds, gts, save_path=save_path, opt_threshold=opt_thresh_tr)
     perf_df_test = pd.DataFrame({'auc': global_auc_test,
@@ -207,10 +191,9 @@ def main(args):
 def get_args():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_dataset', type=str, default='DRIVE', help='which dataset was the model trained on')
-    parser.add_argument('--test_dataset', type=str, default='DRIVE', help='which dataset to test')
-    parser.add_argument('--path_train_preds', type=str, default=None, help='path to training predictions')
-    parser.add_argument('--path_test_preds', type=str, default=None, help='path to test predictions')
+    parser.add_argument('--dataset', type=str, default='DRIVE', help='which dataset to test')
+    parser.add_argument('--path_preds', type=str, default=None, help='path to training predictions')
+    parser.add_argument('--split', type=str, default='', help='name of split to use')
     parser.add_argument('--cut_off', type=str, default='dice', help='threshold maximizing x, x=dice/acc/youden')
 
     return parser.parse_args()
