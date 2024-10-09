@@ -1,5 +1,11 @@
 _*
 *.ipynb_checkpoints
 *.ipynb
-results/**/*.png
-!results/**/perf/*.png
+results/
+experiments/
+data/DRIVEAug/
+data/VessMAPAug/
+data/VessMAP/train_*
+data/VessMAP/test_*
+data/VessMAP/val_*
+data/VessMAP/test_all_*
