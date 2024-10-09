@@ -139,7 +139,7 @@ def main(args):
     print(f"* Average image time: {np.mean(times):g}s")
     print('* Done')
 
-def get_args():
+def get_parser():
 
     parser = argparse.ArgumentParser()
     required_named = parser.add_argument_group('required arguments')
@@ -154,10 +154,10 @@ def get_args():
     parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
     parser.add_argument('--result_path', type=str, default='../results', help='path to save predictions (defaults to results')
 
-    return parser.parse_args()
+    return parser
 
 if __name__ == '__main__':
 
-    _args = get_args()
+    _args = get_parser().parse_args()
     main(_args)
 

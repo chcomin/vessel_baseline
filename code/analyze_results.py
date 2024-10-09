@@ -188,7 +188,7 @@ def main(args):
     print('ROC curve plots saved to ', save_path)
     print('Perf csv saved at ', perf_csv_path)
 
-def get_args():
+def get_parser():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='DRIVE', help='which dataset to test')
@@ -196,9 +196,9 @@ def get_args():
     parser.add_argument('--split_tag', type=str, default='', help='use splits train|val|test{split_tag}.csv. Useful when there are multiple splits.')
     parser.add_argument('--cut_off', type=str, default='dice', help='threshold maximizing x, x=dice/acc/youden')
 
-    return parser.parse_args()
+    return parser
 
 if __name__ == '__main__':
 
-    _args = get_args()
+    _args = get_parser().parse_args()
     main(_args)

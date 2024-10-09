@@ -264,7 +264,7 @@ def main(args):
         with open(osp.join(experiment_path, 'val_metrics.txt'), 'w') as f:
             print(f'Best AUC = {100*m1:.2f}\nBest DICE = {100*m2:.2f}\nBest epoch = {m3}', file=f)
 
-def get_args():
+def get_parser():
 
     parser = argparse.ArgumentParser()
 
@@ -284,9 +284,9 @@ def get_args():
     parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
     parser.add_argument('--seed', type=int, default=0, help='seed')
 
-    return parser.parse_args()
+    return parser
 
 if __name__ == '__main__':
 
-    _args = get_args()
+    _args = get_parser().parse_args()
     main(_args)
