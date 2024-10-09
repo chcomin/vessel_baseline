@@ -1,3 +1,0 @@
-Best AUC = 98.48
-Best DICE = 80.67
-Best cycle = 14
