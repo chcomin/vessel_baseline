@@ -120,7 +120,7 @@ def main(args):
 
     dataset = args.dataset
     path_preds = args.path_preds
-    split = args.split
+    split_tag = args.split_tag
     cut_off = args.cut_off
 
     print(f'* Analyzing performance in {dataset} training set -- Obtaining optimal threshold maximizing {cut_off}')
@@ -128,7 +128,7 @@ def main(args):
     save_path = osp.join(path_preds, 'perf')
 
     perf_csv_path = osp.join(save_path, 'training_performance.csv')
-    csv_path = osp.join('../data', dataset, f'train{split}.csv')
+    csv_path = osp.join('../data', dataset, f'train{split_tag}.csv')
     preds, gts = get_labels_preds(path_preds, csv_path = csv_path)
     os.makedirs(save_path, exist_ok=True)
     metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=None, cut_off=cut_off, mode='train')
@@ -145,7 +145,7 @@ def main(args):
 
     print(f'* Analyzing performance in {dataset} validation set')
     perf_csv_path = osp.join(save_path, 'validation_performance.csv')
-    csv_path = osp.join('../data', dataset, f'val{split}.csv')
+    csv_path = osp.join('../data', dataset, f'val{split_tag}.csv')
     preds, gts = get_labels_preds(path_preds, csv_path = csv_path)
     metrics = compute_performance(preds, gts, save_path=save_path, opt_threshold=opt_thresh_tr, cut_off=cut_off, mode='train')
     global_auc_vl, acc_vl, dice_vl, mcc_vl, spec_vl, sens_vl, _ = metrics
@@ -163,7 +163,7 @@ def main(args):
     os.makedirs(save_path, exist_ok=True)
     perf_csv_path = osp.join(save_path, 'test_performance.csv')
 
-    csv_name = f'test{split}.csv'
+    csv_name = f'test{split_tag}.csv'
     print('-- Testing')
 
     path_test_csv = osp.join('../data', dataset, csv_name)
@@ -193,7 +193,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='DRIVE', help='which dataset to test')
     parser.add_argument('--path_preds', type=str, default=None, help='path to training predictions')
-    parser.add_argument('--split', type=str, default='', help='name of split to use')
+    parser.add_argument('--split_tag', type=str, default='', help='use splits train|val|test{split_tag}.csv. Useful when there are multiple splits.')
     parser.add_argument('--cut_off', type=str, default='dice', help='threshold maximizing x, x=dice/acc/youden')
 
     return parser.parse_args()

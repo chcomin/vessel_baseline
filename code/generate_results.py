@@ -75,7 +75,7 @@ def main(args):
         device = torch.device(args.device)
 
     dataset = args.dataset
-    split = args.split
+    split_tag = args.split_tag
     tta = args.tta
 
     # parse config file if provided
@@ -113,7 +113,7 @@ def main(args):
 
     data_path = osp.join('../data', dataset)
 
-    csv_path = f'test_all{split}.csv'
+    csv_path = f'test_all{split_tag}.csv'
     print('* Reading test data from ' + osp.join(data_path, csv_path))
     test_dataset = get_test_dataset(data_path, csv_path=csv_path, tg_size=tg_size, channels=channels)
     print(f'* Instantiating model  = {str(model_name)}')
@@ -144,13 +144,13 @@ def get_args():
     parser = argparse.ArgumentParser()
     required_named = parser.add_argument_group('required arguments')
     required_named.add_argument('--dataset', type=str, help='generate results for which dataset', required=True)
-    parser.add_argument('--split', type=str, default='', help='split to use')
     parser.add_argument('--tta', type=str, default='from_preds', help='test-time augmentation (no/from_logits/from_preds)')
     parser.add_argument('--config_file', type=str, default=None, help='experiments/name_of_config_file, overrides everything')
     # im_size overrides config file
     parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
-    parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
     parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
+    parser.add_argument('--split_tag', type=str, default='', help='use file f"test_all{split_tag}.csv". Useful when there are multiple splits.')
+    parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
     parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
     parser.add_argument('--result_path', type=str, default='../results', help='path to save predictions (defaults to results')
 
