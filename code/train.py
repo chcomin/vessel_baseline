@@ -172,14 +172,10 @@ def train_model(model, optimizer, criterion, train_loader, val_loader, epochs, e
     
     return best_auc, best_dice, best_epoch
 
-def main(args):
+def main(arg_dict=None):
 
-    if args.device.startswith("cuda"):
-        if not torch.cuda.is_available():
-            raise RuntimeError("cuda is not currently available!")
-        device = torch.device("cuda")
-    else:  #cpu
-        device = torch.device(args.device)
+    args = get_args(arg_dict)
+    device = torch.device(args.device)
 
     # reproducibility
     seed_value = args.seed
@@ -265,6 +261,7 @@ def main(args):
             print(f'Best AUC = {100*m1:.2f}\nBest DICE = {100*m2:.2f}\nBest epoch = {m3}', file=f)
 
 def get_parser():
+    """Get parser for command line arguments."""
 
     parser = argparse.ArgumentParser()
 
@@ -278,7 +275,7 @@ def get_parser():
     parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
     parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
     parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
-    parser.add_argument('--do_not_save', type=str2bool, nargs='?', const=True, default=False, help='avoid saving anything')
+    parser.add_argument('--do_not_save', action='store_true', help='avoid saving anything')
     parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
     parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')
     parser.add_argument('--device', type=str, default='cuda:0', help='where to run the training code (e.g. "cpu" or "cuda:0") [default: %(default)s]')
@@ -286,7 +283,24 @@ def get_parser():
 
     return parser
 
-if __name__ == '__main__':
+def get_args(arg_dict=None):
+    """
+    Get arguments from the command line or from a dictionary. To use the
+    arguments from the command line, just call get_args(). Alternativally, you
+    can create a dictionary like {"--arg1": "value1", "--arg2": "value2"} and
+    pass to this function.
+    """
 
-    _args = get_parser().parse_args()
-    main(_args)
+    parser = get_parser()
+    if arg_dict is None:
+        args = parser.parse_args()
+    else:
+        vals = []
+        for k, v in arg_dict.items():
+            vals.extend([k, v])
+        args = parser.parse_args(vals)
+
+    return args
+
+if __name__ == '__main__':
+    main()

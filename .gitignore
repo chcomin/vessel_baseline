@@ -9,3 +9,4 @@ data/VessMAP/train_*
 data/VessMAP/test_*
 data/VessMAP/val_*
 data/VessMAP/test_all_*
+tests/
