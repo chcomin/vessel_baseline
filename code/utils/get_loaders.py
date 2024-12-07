@@ -59,7 +59,7 @@ class TrainDataset(Dataset):
         # QUICK HACK FOR PSEUDO_SEG IN VESSELS, BUT IT SPOILS A/V
         if len(self.label_values)==2: # vessel segmentation case
             target = target.float()
-            if torch.max(target) >1:
+            if torch.max(target)>1:
                 target= target.float()/255
 
         return img, target

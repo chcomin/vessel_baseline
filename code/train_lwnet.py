@@ -190,7 +190,7 @@ def main(arg_dict=None):
     use_green = args.use_green
 
     if in_c==3 and use_green==True:
-        raise ValueError('Parameter use_green was changed to True, but in_c=3.')
+        raise ValueError('Parameter use_green is True, but in_c=3.')
     if in_c==3:
         channels = 'all'
     elif in_c==1:
@@ -207,7 +207,7 @@ def main(arg_dict=None):
     else:
         sys.exit('im_size should be a number or a tuple of two numbers')
 
-    do_not_save = str2bool(args.do_not_save)
+    do_not_save = args.do_not_save
     if do_not_save is False:
         save_path = args.save_path
         if save_path == 'date_time':
@@ -225,9 +225,7 @@ def main(arg_dict=None):
     csv_train = args.csv_train
     csv_val = csv_train.replace('train', 'val')
 
-    n_classes = 1
     label_values = [0, 255]
-
 
     print(f"* Creating Dataloaders, batch size = {bs}, workers = {args.num_workers}")
     train_loader, val_loader = get_train_val_loaders(csv_path_train=csv_train, csv_path_val=csv_val, batch_size=bs, 
@@ -235,7 +233,7 @@ def main(arg_dict=None):
                                                      num_workers=args.num_workers)
 
     print(f'* Instantiating a {model_name} model')
-    model = get_arch(model_name, in_c=in_c, n_classes=n_classes)
+    model = get_arch(model_name, in_c=in_c)
     model = model.to(device)
 
     num_p = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -245,7 +243,7 @@ def main(arg_dict=None):
     scheduler = torch.optim.lr_scheduler.PolynomialLR(optimizer, total_iters=epochs*len(train_loader), power=0.9)
     setattr(optimizer, 'max_lr', max_lr)  # store it inside the optimizer for accessing to it later
 
-    criterion = torch.nn.BCEWithLogitsLoss() if model.n_classes == 1 else torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.BCEWithLogitsLoss()
 
     print('* Instantiating loss function', str(criterion))
     print('* Starting to train\n','-' * 10)
@@ -272,9 +270,9 @@ def get_parser():
     parser.add_argument('--epochs', type=int, default=1000, help='number of epochs to train')
     parser.add_argument('--evaluate_every', type=int, default=50, help='number of epochs between model evaluations')
     parser.add_argument('--metric', type=str, default='auc', help='which metric to use for monitoring progress (tr_auc/auc/loss/dice)')
-    parser.add_argument('--im_size', help='delimited list input, could be 600,400', type=str, default='512')
-    parser.add_argument('--in_c', type=int, default=3, help='channels in input images')
-    parser.add_argument('--use_green', type=int, default=0, help='if 0 and in_c=1, converts to gray. Use green channel otherwise')
+    parser.add_argument('--im_size', help='image size, e.g.: 600,400', type=str, default='512')
+    parser.add_argument('--in_c', type=int, default=3, help='number of image channels to use')
+    parser.add_argument('--use_green', action='store_true', help='If set, uses green channel. Otherwise, convert image to gray.')
     parser.add_argument('--do_not_save', action='store_true', help='avoid saving anything')
     parser.add_argument('--save_path', type=str, default='date_time', help='path to save model (defaults to date/time')
     parser.add_argument('--num_workers', type=int, default=0, help='number of parallel (multiprocessing) workers to launch for data loading tasks (handled by pytorch) [default: %(default)s]')
