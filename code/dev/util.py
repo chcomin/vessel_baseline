@@ -5,92 +5,10 @@ import matplotlib.pyplot as plt
 from IPython import display
 import torch
 
-class BatchMetric:
-    """"
-    Class for storing batch metrics during an epoch. The class allows storing a 
-    single value for each batch or an iterable of values containing a metric 
-    calculated for each item of the batches.
-
-    Example 1:
-    metric = BatchMetric('train/loss')
-    ...
-    loss = loss_func(scores, targets)
-    metric.add(loss, 32)  # Average loss calculated over 32 items
-    ...
-    average = metric.reduce() # Average loss over all batches in epoch
-
-    Example 2:
-    metric = BatchMetric('train/loss', per_item_metrics=True)
-    ...
-    loss = loss_func(scores, targets)  # loss created with reduction='none'
-    metric.add(loss)  // Loss value for each item in the batch
-    ...
-    average = metric.reduce() # Average loss over all batches in epoch
-    """
-
-    def __init__(self, name, per_item_metrics=False):
-        self.name = name
-        self.per_item_metrics = per_item_metrics
-        self.values = []
-
-    def add(self, value, n_items=1):
-
-        per_item_metrics = self.per_item_metrics
-        if per_item_metrics and not self._is_iterable(value):
-            raise ValueError('Since per_item_metrics is True, value must be iterable.')
-        if per_item_metrics and n_items>1:
-            raise ValueError('n_items only allowed if per_item_metrics is False.')
-        if not per_item_metrics and self._is_iterable(value):
-            raise ValueError('Since per_item_metrics is False, value must be scalar.')
-        
-        if per_item_metrics:
-            # value is iterable and has a length
-            data = (value, None)
-        else:
-            # value is scalar and may represent an average over n_items
-            data = (value, n_items)
-
-        self.values.append(data)
-
-    def reduce(self, reduction='mean'):
-
-        agg_metric = 0
-        n_elements = 0
-        for value, n_items in self.values:
-            if self.per_item_metrics:
-                # Sum values in batch and count number of elements
-                batch_sum = sum(value)
-                n_elements += len(value)
-            else:
-                # Multiply value by n_items to undo the average
-                batch_sum = value*n_items
-                n_elements += n_items
-
-            # Check if batch_sum has the method item() to convert the value
-            # to a Python scalar and send it to the cpu. If the method is
-            # absent, assume the value is already a Python scalar.
-            try:
-                batch_sum = batch_sum.item()
-            except AttributeError:
-                pass
-
-            agg_metric += batch_sum
-
-        if reduction=='mean':
-            agg_metric /= n_elements
-
-        return agg_metric
-
-    def _is_iterable(self, obj):
-        # obj can be a python, tensor or numpy scalar as well as
-        # a list, tuple, tensor or numpy array. We need to handle all cases.
-        try:
-            iter(obj)
-            return True
-        except TypeError:
-            return False
-
 class Logger:
+    """
+    Class for logging metrics during training and validation.
+    """
 
     def __init__(self): 
         self.epoch_data = {}
@@ -98,11 +16,20 @@ class Logger:
         #self.names = metric_names
             
     def log(self, epoch, name, value):
+        """Log a metric value for a given epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            Epoch number
+        name : str
+            Name of the metric
+        value : float | int
+            Value to be logged
+        """
 
         if epoch!=self.current_epoch and epoch!=self.current_epoch+1:
             raise ValueError(f'Current epoch is {self.current_epoch} but {epoch} received')
-        #if name not in self.names:
-        #    raise ValueError(f'Metric {name} not in list of metric names.')
 
         epoch_data = self.epoch_data
         if epoch not in epoch_data:
@@ -112,6 +39,13 @@ class Logger:
         epoch_data[epoch][name] = value
 
     def get_data(self):
+        """Returns a pandas dataframe with the logged data.
+
+        Returns
+        -------
+        pd.DataFrame
+            The dataframe
+        """
 
         df = pd.DataFrame(self.epoch_data).T
         df.insert(0, 'epoch', df.index)
@@ -119,8 +53,19 @@ class Logger:
         return df
 
 class SingleMetric:
+    """
+    Class for storing a function representing a performance metric.
+    """
 
     def __init__(self, metric_name, func):
+        """
+        Create a SingleMetric object from a performance function.
+
+        Parameters
+        ----------
+        metric_name : Name of the metric
+        func : Function that calculates the metric
+        """
         self.metric_name = metric_name
         self.func = func
 
@@ -128,8 +73,19 @@ class SingleMetric:
         return (self.metric_name, self.func(*args))
 
 class MultipleMetrics:
+    """
+    Class for storing a function that calculates many performance metrics in one call.
+    """
 
     def __init__(self, metric_names, func):
+        """
+        Create a MultipleMetrics object from a performance function.
+
+        Parameters
+        ----------
+        metric_name : Name of the metric
+        func : Function that calculates the metric
+        """
         self.metric_names = metric_names
         self.func = func
 
@@ -160,7 +116,7 @@ def seed_worker(worker_id):
 
 def show_log(logger):
     """
-    Plota métricas em um notebook.
+    Plot the logged data from a Logger object in a Jupyter notebook.
     """
 
     df = logger.get_data()

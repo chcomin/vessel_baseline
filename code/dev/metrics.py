@@ -2,9 +2,20 @@ import torch
 
 @torch.no_grad()
 def confusion_metrics(scores, targets):
-    """
-    Função que calcula a Intersecção sobre a União entre o resultado
-    da rede e o rótulo conhecido.
+    """Calculate accuracy, precision, recall, IoU and Dice scores for a batch
+    of data.
+
+    Parameters
+    ----------
+    scores
+        Output from a network. Dimension 1 is treated as the class dimension.
+    targets
+        Labels
+
+    Returns
+    -------
+        A tuple (acc, iou, prec, rec, dice) containing the accuracy, IoU, 
+        precision, recall, and Dice scores.
     """
 
     pred = scores.argmax(dim=1).reshape(-1)
@@ -24,5 +35,6 @@ def confusion_metrics(scores, targets):
     iou = tp/(tp+fp+fn)
     prec = tp/(tp+fp)
     rec = tp/(tp+fn)
+    dice = 2*tp/(2*tp+fn)
 
-    return acc, iou, prec, rec
+    return acc, iou, prec, rec, dice
