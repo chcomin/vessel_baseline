@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torchvision.models import resnet18, ResNet18_Weights
 from dataset import get_dataset, collate_fn
 from util import Logger, MultipleMetrics, seed_all, seed_worker, show_log
-from metrics import confusion_metrics
+from metrics import confusion_matrix_metrics
 from models import EncoderDecoder
 
 class ModuleRunner:
@@ -162,7 +162,7 @@ def train(arg_dict=None):
             , resize_size=resize_size
             )
     else:
-        raise ValueError(f'Dataset {dataset} not recognized')
+        raise ValueError(f'Dataset {dataset_name} not recognized')
     #ds_train.indices = ds_train.indices[:5*bs_train]
 
     dl_train = DataLoader(
@@ -193,7 +193,7 @@ def train(arg_dict=None):
     #---
 
     perf_funcs = [
-        MultipleMetrics(['acc', 'iou', 'prec', 'rec', 'dice'], confusion_metrics)
+        MultipleMetrics(['acc', 'iou', 'prec', 'rec', 'dice'], confusion_matrix_metrics)
     ]
     
     

@@ -1,7 +1,7 @@
 import torch
 
 @torch.no_grad()
-def confusion_metrics(scores, targets):
+def confusion_matrix_metrics(scores, targets):
     """Calculate accuracy, precision, recall, IoU and Dice scores for a batch
     of data.
 
